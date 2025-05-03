@@ -99,37 +99,96 @@ function getContrastColor(hexColor) {
 
 function exportGraphAsPNG() {
     const svgElement = document.querySelector('#graph-container svg');
-    if (!svgElement) return;
+    if (!svgElement) {
+        console.error('SVG element not found');
+        return;
+    }
 
-    // Get SVG data
-    const svgData = new XMLSerializer().serializeToString(svgElement);
+    // Create a copy of the SVG to avoid modifying the original
+    const svgClone = svgElement.cloneNode(true);
+
+    // Make sure all SVG elements have explicit styling
+    // This ensures that CSS styles are included in the exported image
+    const lines = svgClone.querySelectorAll('.link');
+    lines.forEach(line => {
+        // Explicitly set stroke attributes that might be in CSS
+        if (!line.getAttribute('stroke')) {
+            line.setAttribute('stroke', '#999');
+        }
+        if (!line.getAttribute('stroke-width')) {
+            line.setAttribute('stroke-width', '2');
+        }
+        if (!line.getAttribute('stroke-opacity')) {
+            line.setAttribute('stroke-opacity', '0.6');
+        }
+    });
+
+    // Set explicit dimensions on the SVG
+    const width = svgElement.clientWidth || svgElement.parentElement.clientWidth;
+    const height = svgElement.clientHeight || svgElement.parentElement.clientHeight;
+    svgClone.setAttribute('width', width);
+    svgClone.setAttribute('height', height);
+
+    // You might need to include namespaces for proper rendering
+    svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svgClone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+    // Get SVG data with proper encoding
+    const svgData = new XMLSerializer().serializeToString(svgClone);
     const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
     const url = URL.createObjectURL(svgBlob);
 
-    // Create canvas
+    // Create canvas with appropriate dimensions
     const canvas = document.createElement('canvas');
-    const graphContainer = document.getElementById('graph-container');
-    canvas.width = graphContainer.clientWidth;
-    canvas.height = graphContainer.clientHeight;
+    // Use a slightly higher resolution for better quality
+    const scale = 2; // 2x scaling for better resolution
+    canvas.width = width * scale;
+    canvas.height = height * scale;
 
     const context = canvas.getContext('2d');
     context.fillStyle = '#f9f9f9'; // Match background color
     context.fillRect(0, 0, canvas.width, canvas.height);
+    context.scale(scale, scale); // Scale up for better resolution
 
-    // Create image
+    // Create image and draw to canvas
     const img = new Image();
     img.onload = () => {
+        // Draw the image
         context.drawImage(img, 0, 0);
         URL.revokeObjectURL(url);
 
         // Download the image
         const a = document.createElement('a');
         a.download = 'graph-visualization.png';
+
+        // Use custom filename if graph has a title
+        if (window.SchGraphApp && window.SchGraphApp.state &&
+            window.SchGraphApp.state.currentGraph &&
+            window.SchGraphApp.state.currentGraph.title) {
+            a.download = `${window.SchGraphApp.state.currentGraph.title.toLowerCase().replace(/\s+/g, '-')}.png`;
+        }
+
         a.href = canvas.toDataURL('image/png');
+        document.body.appendChild(a);
         a.click();
+
+        // Clean up
+        setTimeout(() => {
+            document.body.removeChild(a);
+        }, 100);
     };
+
+    // Set crossorigin to anonymous to avoid tainted canvas issues
+    img.crossOrigin = 'Anonymous';
     img.src = url;
+
+    // Add error handling
+    img.onerror = (error) => {
+        console.error('Error creating export:', error);
+        URL.revokeObjectURL(url);
+    };
 }
+
 
 /**
  * Get URL parameters as an object
@@ -146,8 +205,9 @@ function getUrlParams() {
     return params;
 }
 
-// Export utility functions to global namespace
-window.SchGraphApp = window.SchGraphApp || {};
-if (window.SchGraphApp && window.SchGraphApp.utils) {
+// Make sure the function is attached to the app namespace
+document.addEventListener('DOMContentLoaded', function() {
+    window.SchGraphApp = window.SchGraphApp || {};
+    window.SchGraphApp.utils = window.SchGraphApp.utils || {};
     window.SchGraphApp.utils.exportGraphAsPNG = exportGraphAsPNG;
-}
+});

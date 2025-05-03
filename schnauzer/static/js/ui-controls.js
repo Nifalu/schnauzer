@@ -7,7 +7,7 @@
 function initializeUIControls() {
     const app = window.SchGraphApp;
 
-    // Add optional export button if not already present
+    // Add export button
     if (!document.getElementById('export-graph')) {
         const exportBtn = document.createElement('button');
         exportBtn.id = 'export-graph';
@@ -20,91 +20,8 @@ function initializeUIControls() {
         }
     }
 
-    // Add event listeners to controls
-    setupEventListeners();
-
     // Set up search functionality if search box exists
     setupSearch();
-
-    /**
-     * Set up event listeners for UI controls
-     */
-    function setupEventListeners() {
-        // Export button
-        const exportBtn = document.getElementById('export-graph');
-        if (exportBtn) {
-            exportBtn.addEventListener('click', () => {
-                exportGraphAsPNG();
-            });
-        }
-
-        // Close node details when clicking outside
-        document.addEventListener('click', (event) => {
-            // Only process if there's a selected node and click is outside node details
-            if (app.state.selectedNode &&
-                !event.target.closest('#node-details') &&
-                !event.target.closest('.node')) {
-
-                // Deselect node and hide details
-                app.state.selectedNode = null;
-                app.elements.nodeDetails.classList.add('d-none');
-            }
-        });
-
-        // Handle window resize to adjust visualization size
-        window.addEventListener('resize', debounce(() => {
-            const svg = document.querySelector('#graph-container svg');
-            if (svg) {
-                svg.setAttribute('width', app.elements.graphContainer.clientWidth);
-                svg.setAttribute('height', app.elements.graphContainer.clientHeight);
-            }
-        }, 250));
-    }
-
-    /**
-     * Export the current graph visualization as a PNG image
-     */
-    function exportGraphAsPNG() {
-        const svgElement = document.querySelector('#graph-container svg');
-        if (!svgElement) return;
-
-        // Get SVG data
-        const svgData = new XMLSerializer().serializeToString(svgElement);
-        const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
-        const url = URL.createObjectURL(svgBlob);
-
-        // Create canvas
-        const canvas = document.createElement('canvas');
-        const graphContainer = document.getElementById('graph-container');
-        canvas.width = graphContainer.clientWidth;
-        canvas.height = graphContainer.clientHeight;
-
-        const context = canvas.getContext('2d');
-        context.fillStyle = '#f9f9f9'; // Match background color
-        context.fillRect(0, 0, canvas.width, canvas.height);
-
-        // Create image
-        const img = new Image();
-        img.onload = () => {
-            context.drawImage(img, 0, 0);
-            URL.revokeObjectURL(url);
-
-            // Download the image
-            const a = document.createElement('a');
-            a.download = 'graph-visualization.png';
-            if (app.state.currentGraph && app.state.currentGraph.title) {
-                a.download = `${app.state.currentGraph.title.toLowerCase().replace(/\s+/g, '-')}.png`;
-            }
-            a.href = canvas.toDataURL('image/png');
-            a.click();
-
-            // Cleanup
-            setTimeout(() => {
-                document.body.removeChild(a);
-            }, 100);
-        };
-        img.src = url;
-    }
 
     /**
      * Set up search functionality if search box exists
@@ -175,7 +92,7 @@ function initializeUIControls() {
 
     // Return public API
     return {
-        exportGraphAsPNG
+
     };
 }
 

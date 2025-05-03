@@ -4,7 +4,7 @@
 // Wait for the DOM to load
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize app namespace to avoid global variables
-    window.SchGraphApp = {};
+    window.SchGraphApp = window.SchGraphApp || {};
     const app = window.SchGraphApp;
 
     // Global state variables
@@ -43,11 +43,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set up socket event handlers
     setupSocketHandlers();
 
-    // Attach event listeners to UI elements
-    setupUIEventListeners();
-
     // Initialize the visualization
     app.viz = initializeVisualization();
+
+    // Attach event listeners to UI elements
+    setupUIEventListeners();
 
     // Initial graph load
     loadGraphData();
@@ -76,9 +76,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // UI Button handlers
     function setupUIEventListeners() {
-        // Reset zoom button
+        // reset zoom button
         app.elements.resetZoomBtn.addEventListener('click', function() {
-            app.viz.resetZoom();
+            console.log('Reset zoom button clicked'); // Debug log
+            if (app.viz && app.viz.resetZoom) {
+                app.viz.resetZoom();
+            } else {
+                console.error('resetZoom function not found');
+            }
         });
 
         // Toggle physics button
@@ -92,6 +97,21 @@ document.addEventListener('DOMContentLoaded', function() {
         app.elements.requestUpdateBtn.addEventListener('click', function() {
             loadGraphData();
         });
+
+        // export button
+        const exportBtn = document.getElementById('export-graph');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', function() {
+                console.log('Export button clicked'); // Debug log
+                // Use the proper exportGraphAsPNG function from utils
+                if (window.SchGraphApp.utils && window.SchGraphApp.utils.exportGraphAsPNG) {
+                    window.SchGraphApp.utils.exportGraphAsPNG();
+                } else {
+                    // Fallback to local implementation if needed
+                    exportGraphAsPNG();
+                }
+            });
+        }
 
         // Clear search button
         const clearSearchBtn = document.getElementById('clear-search');

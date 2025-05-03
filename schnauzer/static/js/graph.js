@@ -6,6 +6,8 @@ function initializeVisualization() {
     const width = app.elements.graphContainer.clientWidth;
     const height = app.elements.graphContainer.clientHeight;
 
+    let svg, zoom; // Declare variables at this scope level
+
     function getNodeDimensions(node) {
         return {
             width: Math.max(100, node.label ? node.label.length * 8 : 100),
@@ -14,7 +16,7 @@ function initializeVisualization() {
     }
 
     // Create SVG container
-    const svg = d3.select("#graph-container")
+    svg = d3.select("#graph-container")
         .append("svg")
         .attr("width", width)
         .attr("height", height);
@@ -23,7 +25,7 @@ function initializeVisualization() {
     const g = svg.append("g");
 
     // Set up zoom behavior
-    const zoom = d3.zoom()
+    zoom = d3.zoom()
         .scaleExtent([0.1, 4])
         .on("zoom", (event) => {
             g.attr("transform", event.transform);
@@ -253,7 +255,6 @@ function initializeVisualization() {
                 // Calculate direction vector between source and target
                 const dx = d.target.x - d.source.x;
                 const dy = d.target.y - d.source.y;
-                const angle = Math.atan2(dy, dx);
 
                 // Get target node dimensions
                 const targetDimensions = getNodeDimensions(d.target);
@@ -273,14 +274,14 @@ function initializeVisualization() {
                 const halfHeight = targetDimensions.height / 2;
 
                 // Check intersection with each edge of the rectangle
-                if (unitDx != 0) {
+                if (unitDx !== 0) {
                     // Intersection with vertical edges
                     const tx1 = (-halfWidth - padding) / unitDx; // Left edge
                     const tx2 = (halfWidth + padding) / unitDx;  // Right edge
                     t = Math.min(t, Math.max(tx1, tx2));
                 }
 
-                if (unitDy != 0) {
+                if (unitDy !== 0) {
                     // Intersection with horizontal edges
                     const ty1 = (-halfHeight - padding) / unitDy; // Top edge
                     const ty2 = (halfHeight + padding) / unitDy;  // Bottom edge
@@ -362,11 +363,16 @@ function initializeVisualization() {
         }
     }
 
-    // Reset zoom function
+    // Reset zoom function - FIXED VERSION
     function resetZoom() {
-        svg.transition()
-            .duration(750)
-            .call(zoom.transform, d3.zoomIdentity);
+        console.log('Resetting zoom'); // Debug log
+        if (svg && zoom) {
+            svg.transition()
+                .duration(750)
+                .call(zoom.transform, d3.zoomIdentity);
+        } else {
+            console.error('svg or zoom not defined');
+        }
     }
 
     // Toggle physics simulation

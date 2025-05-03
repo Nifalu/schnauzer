@@ -70,33 +70,19 @@
                         <h5 class="mb-0">Graph Information</h5>
                     </div>
                     <div class="card-body">
-                        <h6>Interactions</h6>
-                        <ul class="list-group mb-3">
-                            <li class="list-group-item d-flex align-items-center">
-                                <i class="bi bi-mouse me-2"></i> Click a node to view details
-                            </li>
-                            <li class="list-group-item d-flex align-items-center">
-                                <i class="bi bi-info-circle me-2"></i> Hover over nodes for quick info
-                            </li>
-                            <li class="list-group-item d-flex align-items-center">
-                                <i class="bi bi-arrows-move me-2"></i> Drag nodes to reposition
-                            </li>
-                            <li class="list-group-item d-flex align-items-center">
-                                <i class="bi bi-mouse-fill me-2"></i> Mouse wheel to zoom
-                            </li>
-                        </ul>
-                        <h6>Keyboard Shortcuts</h6>
-                        <ul class="list-group">
-                            <li class="list-group-item d-flex align-items-center">
-                                <kbd class="me-2">R</kbd> Reset view
-                            </li>
-                            <li class="list-group-item d-flex align-items-center">
-                                <kbd class="me-2">F</kbd> Toggle physics
-                            </li>
-                            <li class="list-group-item d-flex align-items-center">
-                                <kbd class="me-2">Esc</kbd> Close details panel
-                            </li>
-                        </ul>
+                        <div class="graph-stats">
+                            <h6>Statistics</h6>
+                            <ul class="list-group mb-3">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Nodes
+                                    <span class="badge bg-primary rounded-pill" id="node-count">0</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Edges
+                                    <span class="badge bg-primary rounded-pill" id="edge-count">0</span>
+                                </li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -97,33 +97,38 @@ function getContrastColor(hexColor) {
     return luminance > 0.5 ? '#000000' : '#ffffff';
 }
 
-/**
- * Download current graph data as JSON file
- * @param {Object} graphData - The graph data to download
- * @param {string} filename - Optional filename
- */
-function downloadGraphJSON(graphData, filename = 'graph-data.json') {
-    if (!graphData) return;
+function exportGraphAsPNG() {
+    const svgElement = document.querySelector('#graph-container svg');
+    if (!svgElement) return;
 
-    // Create JSON string with pretty formatting
-    const jsonStr = JSON.stringify(graphData, null, 2);
+    // Get SVG data
+    const svgData = new XMLSerializer().serializeToString(svgElement);
+    const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
+    const url = URL.createObjectURL(svgBlob);
 
-    // Create download link
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    // Create canvas
+    const canvas = document.createElement('canvas');
+    const graphContainer = document.getElementById('graph-container');
+    canvas.width = graphContainer.clientWidth;
+    canvas.height = graphContainer.clientHeight;
 
-    // Create temporary link and trigger download
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#f9f9f9'; // Match background color
+    context.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Cleanup
-    setTimeout(() => {
-        document.body.removeChild(a);
+    // Create image
+    const img = new Image();
+    img.onload = () => {
+        context.drawImage(img, 0, 0);
         URL.revokeObjectURL(url);
-    }, 100);
+
+        // Download the image
+        const a = document.createElement('a');
+        a.download = 'graph-visualization.png';
+        a.href = canvas.toDataURL('image/png');
+        a.click();
+    };
+    img.src = url;
 }
 
 /**
@@ -143,11 +148,6 @@ function getUrlParams() {
 
 // Export utility functions to global namespace
 window.SchGraphApp = window.SchGraphApp || {};
-window.SchGraphApp.utils = {
-    truncateText,
-    formatNodeDetails,
-    stringToColor,
-    getContrastColor,
-    downloadGraphJSON,
-    getUrlParams
-};
+if (window.SchGraphApp && window.SchGraphApp.utils) {
+    window.SchGraphApp.utils.exportGraphAsPNG = exportGraphAsPNG;
+}

@@ -14,13 +14,9 @@
     cursor: pointer;
 }
 
-.node rect {
-    transition: stroke 0.3s ease;
-}
-
 .node:hover rect {
-    stroke: #ffcc00;
-    stroke-width: 3px;
+    transform: scale(1.05);
+    transition: transform 0.2s ease;
 }
 
 .link {
@@ -35,30 +31,58 @@
     pointer-events: none;
 }
 
-/* Tooltip styling */
 .graph-tooltip {
     position: absolute;
     max-width: 300px;
     background-color: white;
-    border: 1px solid #ddd;
-    border-radius: 5px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 6px;
     padding: 10px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.15);
     pointer-events: none;
     font-size: 14px;
     z-index: 1000;
-    transition: opacity 0.3s;
+    opacity: 0;
+    transition: opacity 0.01s ease-in-out;
+    will-change: opacity, transform;
+    transform: translateZ(0);
 }
 
 .graph-tooltip h4 {
     margin-top: 0;
-    border-bottom: 1px solid #eee;
+    font-size: 16px;
+    border-bottom: 1px solid #f0f0f0;
     padding-bottom: 5px;
+    color: #333;
+    font-weight: 600;
+    margin-bottom: 8px;
 }
 
 .graph-tooltip p {
     margin: 5px 0;
+    line-height: 1.4;
 }
+
+.graph-tooltip strong {
+    font-weight: 600;
+    color: #555;
+}
+
+/* Make tooltip more visible on different backgrounds */
+.graph-tooltip::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 6px;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+    z-index: -1;
+}
+
+
 
 /* Graph controls */
 .graph-controls {
@@ -90,4 +114,30 @@ svg {
 #node-details-content {
     max-height: 500px;
     overflow-y: auto;
+}
+
+/* Graph statistics styling */
+.graph-stats .badge {
+    font-size: 14px;
+}
+
+.graph-stats .list-group-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Make the legend more compact */
+.graph-legend .list-group-item {
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+.graph-legend kbd {
+    font-size: 0.75rem;
+    padding: 0.1rem 0.3rem;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 0.2rem;
+    box-shadow: inset 0 -1px 0 rgba(0,0,0,.25);
 }

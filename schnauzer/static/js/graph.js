@@ -6,6 +6,13 @@ function initializeVisualization() {
     const width = app.elements.graphContainer.clientWidth;
     const height = app.elements.graphContainer.clientHeight;
 
+    function getNodeDimensions(node) {
+        return {
+            width: Math.max(100, node.label ? node.label.length * 8 : 100),
+            height: 60
+        };
+    }
+
     // Create SVG container
     const svg = d3.select("#graph-container")
         .append("svg")
@@ -28,7 +35,7 @@ function initializeVisualization() {
     svg.append("defs").append("marker")
         .attr("id", "arrowhead")
         .attr("viewBox", "-0 -5 10 10")
-        .attr("refX", 32)
+        .attr("refX", 0)  // Changed from original value
         .attr("refY", 0)
         .attr("orient", "auto")
         .attr("markerWidth", 6)
@@ -42,23 +49,16 @@ function initializeVisualization() {
     // Get tooltip element
     const tooltip = d3.select(".graph-tooltip");
 
-    // Graph visualization components
-    let simulation = null;
-    let link = null;
-    let node = null;
+    // Track tooltip state
+    let tooltipVisible = false;
+    let currentTooltipNode = null;
 
     // Add mouse event listeners to track mouse state
     svg.on("mousedown", function() {
         app.state.isMouseDown = true;
 
-        // Clear any pending tooltip
-        if (app.state.tooltipTimeout) {
-            clearTimeout(app.state.tooltipTimeout);
-            app.state.tooltipTimeout = null;
-        }
-
-        // Hide any visible tooltip immediately
-        tooltip.transition().duration(0).style("opacity", 0);
+        // Hide tooltip immediately on mousedown
+        hideTooltip();
     });
 
     svg.on("mouseup", function() {
@@ -70,11 +70,69 @@ function initializeVisualization() {
         app.state.isMouseDown = false;
     });
 
+    // Show tooltip function with minimal delay
+    function showTooltip(event, d) {
+        // Don't show tooltip if mouse is pressed (during dragging)
+        if (app.state.isMouseDown) return;
+
+        // Set current node
+        currentTooltipNode = d;
+
+        // Format the description for hover tooltip
+        const description = d.description || "No description available";
+        const formattedDescription = description.length > 150 ?
+            description.substring(0, 147) + "..." :
+            description;
+
+        // Update tooltip content
+        tooltip.html(`
+            <h4>${d.label || d.id || "Unknown"}</h4>
+            <p><strong>Type:</strong> ${d.type || "Not specified"}</p>
+            <div>${formattedDescription.replace(/\n/g, '<br>')}</div>
+        `);
+
+        // Position the tooltip near the cursor but not directly under it
+        // to prevent flickering when moving between elements
+        tooltip
+            .style("left", (event.pageX + 15) + "px")
+            .style("top", (event.pageY - 30) + "px");
+
+        // Make tooltip visible with a very short transition
+        tooltip
+            .transition()
+            .duration(50)
+            .style("opacity", 0.95);
+
+        tooltipVisible = true;
+    }
+
+    // Hide tooltip function
+    function hideTooltip() {
+        // Only transition if tooltip was visible
+        if (tooltipVisible) {
+            tooltip
+                .transition()
+                .duration(50)
+                .style("opacity", 0);
+
+            tooltipVisible = false;
+            currentTooltipNode = null;
+        }
+    }
+
     // Render a graph from data
     function updateGraph(graph) {
         // Ensure graph has nodes and links arrays
         if (!graph.nodes) graph.nodes = [];
         if (!graph.links) graph.links = [];
+
+        // Update counters if the app has stats elements
+        if (app.elements.nodeCountEl) {
+            app.elements.nodeCountEl.textContent = graph.nodes.length;
+        }
+        if (app.elements.edgeCountEl) {
+            app.elements.edgeCountEl.textContent = graph.links.length;
+        }
 
         // Clear existing graph elements
         g.selectAll(".node").remove();
@@ -112,12 +170,14 @@ function initializeVisualization() {
                 .on("end", dragEnded))
             .on("click", nodeClicked);
 
+        node.attr("id", d => `node-${d.id}`);
+
         // Add square nodes with text wrapping
         node.append("rect")
-            .attr("width", d => Math.max(100, d.label ? d.label.length * 8 : 100))
-            .attr("height", 60)
-            .attr("x", d => -Math.max(100, d.label ? d.label.length * 8 : 100) / 2)
-            .attr("y", -30)
+            .attr("width", d => getNodeDimensions(d).width)
+            .attr("height", d => getNodeDimensions(d).height)
+            .attr("x", d => -getNodeDimensions(d).width / 2)
+            .attr("y", d => -getNodeDimensions(d).height / 2)
             .attr("rx", 6)
             .attr("ry", 6)
             .attr("fill", d => {
@@ -169,53 +229,75 @@ function initializeVisualization() {
                 .text(line);
         });
 
-        // Add tooltip events
+        // Add tooltip events with improved responsiveness
         node.on("mouseover", function(event, d) {
-            // Don't show tooltip if mouse is pressed (during dragging or clicking)
-            if (app.state.isMouseDown) return;
-
-            // Clear any existing timeout
-            if (app.state.tooltipTimeout) clearTimeout(app.state.tooltipTimeout);
-
-            // Set a timeout to show the tooltip after a delay
-            app.state.tooltipTimeout = setTimeout(() => {
-                tooltip.transition()
-                    .duration(200)
-                    .style("opacity", .9);
-
-                // Format the description for hover tooltip
-                const description = d.description || "No description available";
-                const formattedDescription = description.replace(/\n/g, '<br>');
-
-                tooltip.html(`
-                    <h4>${d.label || d.id || "Unknown"}</h4>
-                    <p><strong>Type:</strong> ${d.type || "Not specified"}</p>
-                    <div>${formattedDescription}</div>
-                `)
+            if (!app.state.isMouseDown) {
+                showTooltip(event, d);
+            }
+        })
+        .on("mousemove", function(event, d) {
+            // Update tooltip position if it's for the current node
+            if (tooltipVisible && currentTooltipNode === d) {
+                tooltip
                     .style("left", (event.pageX + 15) + "px")
                     .style("top", (event.pageY - 30) + "px");
-            }, 500);
+            }
         })
         .on("mouseout", function() {
-            // Clear the timeout if mouse leaves before the tooltip is shown
-            if (app.state.tooltipTimeout) {
-                clearTimeout(app.state.tooltipTimeout);
-                app.state.tooltipTimeout = null;
-            }
-
-            // Hide the tooltip
-            tooltip.transition()
-                .duration(500)
-                .style("opacity", 0);
+            hideTooltip();
         });
 
-        // Define tick function for simulation
+        // Update the simulation tick function to better handle edge cases
         simulation.on("tick", () => {
-            link
-                .attr("x1", d => d.source.x)
-                .attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x)
-                .attr("y2", d => d.target.y);
+            link.each(function(d) {
+                // Calculate direction vector between source and target
+                const dx = d.target.x - d.source.x;
+                const dy = d.target.y - d.source.y;
+                const angle = Math.atan2(dy, dx);
+
+                // Get target node dimensions
+                const targetDimensions = getNodeDimensions(d.target);
+                const padding = 12; // Padding before the node boundary
+
+                // Calculate the distance to the rectangle intersection
+                // More reliable approach using linear scaling
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                // Using normalized direction for consistent approach
+                const unitDx = dx / distance;
+                const unitDy = dy / distance;
+
+                // Find intersection with rectangle using parametric approach
+                let t = Infinity;
+                const halfWidth = targetDimensions.width / 2;
+                const halfHeight = targetDimensions.height / 2;
+
+                // Check intersection with each edge of the rectangle
+                if (unitDx != 0) {
+                    // Intersection with vertical edges
+                    const tx1 = (-halfWidth - padding) / unitDx; // Left edge
+                    const tx2 = (halfWidth + padding) / unitDx;  // Right edge
+                    t = Math.min(t, Math.max(tx1, tx2));
+                }
+
+                if (unitDy != 0) {
+                    // Intersection with horizontal edges
+                    const ty1 = (-halfHeight - padding) / unitDy; // Top edge
+                    const ty2 = (halfHeight + padding) / unitDy;  // Bottom edge
+                    t = Math.min(t, Math.max(ty1, ty2));
+                }
+
+                // Calculate target point
+                const targetX = d.target.x - t * unitDx;
+                const targetY = d.target.y - t * unitDy;
+
+                // Set the line coordinates
+                d3.select(this)
+                    .attr("x1", d.source.x)
+                    .attr("y1", d.source.y)
+                    .attr("x2", targetX)
+                    .attr("y2", targetY);
+            });
 
             node.attr("transform", d => `translate(${d.x},${d.y})`);
         });
@@ -256,6 +338,9 @@ function initializeVisualization() {
 
     // Drag functions for nodes
     function dragStarted(event, d) {
+        // Hide tooltip immediately when starting to drag
+        hideTooltip();
+
         if (!event.active) simulation.alphaTarget(0.3).restart();
         d.fx = d.x;
         d.fy = d.y;

@@ -25,7 +25,9 @@ document.addEventListener('DOMContentLoaded', function() {
         nodeDetailsContent: document.getElementById('node-details-content'),
         resetZoomBtn: document.getElementById('reset-zoom'),
         togglePhysicsBtn: document.getElementById('toggle-physics'),
-        requestUpdateBtn: document.getElementById('request-update')
+        requestUpdateBtn: document.getElementById('request-update'),
+        nodeCountEl: document.getElementById('node-count'),
+        edgeCountEl: document.getElementById('edge-count')
     };
 
     // SocketIO connection with reconnection options
@@ -63,6 +65,7 @@ document.addEventListener('DOMContentLoaded', function() {
         app.socket.on('graph_update', function(graphData) {
             app.state.currentGraph = graphData;
             app.viz.updateGraph(graphData);
+            updateGraphStats(graphData);
             showStatus('Graph updated', 'success', 3000);
         });
 
@@ -89,6 +92,36 @@ document.addEventListener('DOMContentLoaded', function() {
         app.elements.requestUpdateBtn.addEventListener('click', function() {
             loadGraphData();
         });
+
+        // Clear search button
+        const clearSearchBtn = document.getElementById('clear-search');
+        if (clearSearchBtn) {
+            clearSearchBtn.addEventListener('click', function() {
+                const searchBox = document.getElementById('search-nodes');
+                if (searchBox) {
+                    searchBox.value = '';
+                    // Trigger the input event to clear search
+                    searchBox.dispatchEvent(new Event('input'));
+                }
+            });
+        }
+    }
+
+    // Update graph statistics display
+    function updateGraphStats(graphData) {
+        if (!graphData) return;
+
+        // Update node count
+        const nodeCount = graphData.nodes ? graphData.nodes.length : 0;
+        if (app.elements.nodeCountEl) {
+            app.elements.nodeCountEl.textContent = nodeCount;
+        }
+
+        // Update edge/link count
+        const edgeCount = graphData.links ? graphData.links.length : 0;
+        if (app.elements.edgeCountEl) {
+            app.elements.edgeCountEl.textContent = edgeCount;
+        }
     }
 
     // Load graph data with retry mechanism
@@ -116,6 +149,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
 
                 app.viz.updateGraph(graph);
+                updateGraphStats(graph);
                 showStatus('Graph loaded successfully', 'success', 3000);
             })
             .catch(error => {

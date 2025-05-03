@@ -12,7 +12,7 @@ function initializeUIControls() {
         const exportBtn = document.createElement('button');
         exportBtn.id = 'export-graph';
         exportBtn.className = 'btn btn-sm btn-outline-secondary';
-        exportBtn.innerHTML = '<i class="bi bi-download"></i> Export';
+        exportBtn.innerHTML = '<i class="bi bi-download"></i> Export PNG';
 
         const btnGroup = document.querySelector('.graph-controls .btn-group');
         if (btnGroup) {
@@ -22,9 +22,6 @@ function initializeUIControls() {
 
     // Add event listeners to controls
     setupEventListeners();
-
-    // Add additional keyboard shortcuts
-    setupKeyboardShortcuts();
 
     // Set up search functionality if search box exists
     setupSearch();
@@ -37,10 +34,7 @@ function initializeUIControls() {
         const exportBtn = document.getElementById('export-graph');
         if (exportBtn) {
             exportBtn.addEventListener('click', () => {
-                const graphData = app.state.currentGraph;
-                const title = graphData.title || 'graph';
-                const filename = `${title.toLowerCase().replace(/\s+/g, '-')}.json`;
-                app.utils.downloadGraphJSON(graphData, filename);
+                exportGraphAsPNG();
             });
         }
 
@@ -68,44 +62,48 @@ function initializeUIControls() {
     }
 
     /**
-     * Set up keyboard shortcuts
+     * Export the current graph visualization as a PNG image
      */
-    function setupKeyboardShortcuts() {
-        document.addEventListener('keydown', (event) => {
-            // Only process if not typing in an input field
-            if (event.target.tagName === 'INPUT' ||
-                event.target.tagName === 'TEXTAREA' ||
-                event.target.isContentEditable) {
-                return;
+    function exportGraphAsPNG() {
+        const svgElement = document.querySelector('#graph-container svg');
+        if (!svgElement) return;
+
+        // Get SVG data
+        const svgData = new XMLSerializer().serializeToString(svgElement);
+        const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
+        const url = URL.createObjectURL(svgBlob);
+
+        // Create canvas
+        const canvas = document.createElement('canvas');
+        const graphContainer = document.getElementById('graph-container');
+        canvas.width = graphContainer.clientWidth;
+        canvas.height = graphContainer.clientHeight;
+
+        const context = canvas.getContext('2d');
+        context.fillStyle = '#f9f9f9'; // Match background color
+        context.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Create image
+        const img = new Image();
+        img.onload = () => {
+            context.drawImage(img, 0, 0);
+            URL.revokeObjectURL(url);
+
+            // Download the image
+            const a = document.createElement('a');
+            a.download = 'graph-visualization.png';
+            if (app.state.currentGraph && app.state.currentGraph.title) {
+                a.download = `${app.state.currentGraph.title.toLowerCase().replace(/\s+/g, '-')}.png`;
             }
+            a.href = canvas.toDataURL('image/png');
+            a.click();
 
-            switch (event.key) {
-                case 'r': // Reset zoom
-                    if (app.viz && app.viz.resetZoom) {
-                        app.viz.resetZoom();
-                    }
-                    break;
-
-                case 'f': // Toggle physics
-                    if (app.viz && app.viz.togglePhysics) {
-                        app.state.physicsEnabled = !app.state.physicsEnabled;
-                        const toggleBtn = app.elements.togglePhysicsBtn;
-                        if (toggleBtn) {
-                            toggleBtn.textContent = app.state.physicsEnabled ?
-                                'Freeze Nodes' : 'Enable Physics';
-                        }
-                        app.viz.togglePhysics(app.state.physicsEnabled);
-                    }
-                    break;
-
-                case 'Escape': // Close node details
-                    if (app.state.selectedNode) {
-                        app.state.selectedNode = null;
-                        app.elements.nodeDetails.classList.add('d-none');
-                    }
-                    break;
-            }
-        });
+            // Cleanup
+            setTimeout(() => {
+                document.body.removeChild(a);
+            }, 100);
+        };
+        img.src = url;
     }
 
     /**
@@ -152,6 +150,15 @@ function initializeUIControls() {
                 }
             });
         }, 200));
+
+        // Clear search button
+        const clearBtn = document.getElementById('clear-search');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                searchBox.value = '';
+                searchBox.dispatchEvent(new Event('input'));
+            });
+        }
     }
 
     /**
@@ -168,7 +175,7 @@ function initializeUIControls() {
 
     // Return public API
     return {
-        // Add any methods that need to be accessed outside
+        exportGraphAsPNG
     };
 }
 

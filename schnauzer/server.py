@@ -19,7 +19,7 @@ class Server:
     and the web frontend for visualization.
     """
 
-    def __init__(self, web_port=5000, backend_port=5555):
+    def __init__(self, web_port=8080, backend_port=8086):
         """
         Initialize the visualization server.
 
@@ -224,10 +224,10 @@ def main():
     """Parse command line arguments and start the server."""
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='NetworkX Graph Visualization Server')
-    parser.add_argument('--port', type=int, default=5000,
-                      help='Port to run the web server on (default: 5000)')
-    parser.add_argument('--backend-port', type=int, default=5555,
-                      help='Port to listen for backend connections (default: 5555)')
+    parser.add_argument('--port', type=int, default=8080,
+                      help='Port to run the web server on (default: 8080)')
+    parser.add_argument('--backend-port', type=int, default=8086,
+                      help='Port to listen for backend connections (default: 8086)')
 
     args = parser.parse_args()
 

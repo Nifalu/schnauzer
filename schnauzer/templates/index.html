@@ -25,6 +25,9 @@
                                 <button id="reset-zoom" class="btn btn-sm btn-outline-secondary">Reset View</button>
                                 <button id="toggle-physics" class="btn btn-sm btn-outline-secondary">Freeze Nodes</button>
                                 <button id="request-update" class="btn btn-sm btn-outline-primary">Request Update</button>
+                                <button id="export-graph" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-download"></i> Export
+                                </button>
                             </div>
                         </div>
                         <!-- D3 will render the SVG here -->
@@ -36,6 +39,21 @@
             </div>
 
             <div class="col-md-3">
+                <!-- Search box for nodes -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Search Nodes</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="input-group">
+                            <input type="text" id="search-nodes" class="form-control" placeholder="Search...">
+                            <button class="btn btn-outline-secondary" type="button" id="clear-search">
+                                <i class="bi bi-x"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Node details panel (initially hidden) -->
                 <div class="card mb-4 d-none" id="node-details">
                     <div class="card-header bg-primary text-white">
@@ -67,6 +85,18 @@
                                 <i class="bi bi-mouse-fill me-2"></i> Mouse wheel to zoom
                             </li>
                         </ul>
+                        <h6>Keyboard Shortcuts</h6>
+                        <ul class="list-group">
+                            <li class="list-group-item d-flex align-items-center">
+                                <kbd class="me-2">R</kbd> Reset view
+                            </li>
+                            <li class="list-group-item d-flex align-items-center">
+                                <kbd class="me-2">F</kbd> Toggle physics
+                            </li>
+                            <li class="list-group-item d-flex align-items-center">
+                                <kbd class="me-2">Esc</kbd> Close details panel
+                            </li>
+                        </ul>
                     </div>
                 </div>
             </div>
@@ -88,8 +118,11 @@
     <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
 
-    <!-- Custom JavaScript for graph visualization -->
+    <!-- Custom JavaScript for graph visualization (modular structure) -->
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
     <script src="{{ url_for('static', filename='js/graph.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/ui-controls.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     <!-- Pass title to JavaScript -->
     <script>

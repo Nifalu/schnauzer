@@ -6,7 +6,7 @@ import atexit
 class VisualizationClient:
     """Client for sending graph data to the visualization server."""
 
-    def __init__(self, host='localhost', port=5555):
+    def __init__(self, host='localhost', port=8086):
         """Initialize the visualization client."""
         self.host = host
         self.port = port

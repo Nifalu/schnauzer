@@ -1,28 +1,10 @@
-// NetworkX DiGraph Visualization with D3.js and SocketIO
+// graph.js - Core graph visualization functionality
+// Handles the D3.js SVG setup and rendering
 
-// Wait for the DOM to load
-document.addEventListener('DOMContentLoaded', function() {
-    // SocketIO connection with reconnection options
-    const socket = io({
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        forceNew: true,           // Force a new connection
-        timeout: 20000            // Increase timeout
-    });
-
-    // Constants and variables
-    const width = document.getElementById('graph-container').clientWidth;
-    const height = document.getElementById('graph-container').clientHeight;
-    let physicsEnabled = true;
-    let simulation = null;
-    let link = null;
-    let node = null;
-    let currentGraph = null;
-    let selectedNode = null;
-    let tooltipTimeout = null;
-    let isMouseDown = false;
+function initializeVisualization() {
+    const app = window.SchGraphApp;
+    const width = app.elements.graphContainer.clientWidth;
+    const height = app.elements.graphContainer.clientHeight;
 
     // Create SVG container
     const svg = d3.select("#graph-container")
@@ -46,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
     svg.append("defs").append("marker")
         .attr("id", "arrowhead")
         .attr("viewBox", "-0 -5 10 10")
-        .attr("refX", 32) // Increased to account for larger squares
+        .attr("refX", 32)
         .attr("refY", 0)
         .attr("orient", "auto")
         .attr("markerWidth", 6)
@@ -60,43 +42,36 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get tooltip element
     const tooltip = d3.select(".graph-tooltip");
 
-    // Load graph data with retry mechanism
-    function loadGraphData() {
-        fetch('/graph-data')
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! Status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(graph => {
-                currentGraph = graph;
+    // Graph visualization components
+    let simulation = null;
+    let link = null;
+    let node = null;
 
-                // Update page title if provided in graph data
-                if (graph.title) {
-                    document.title = graph.title;
-                    // Update the header if it exists
-                    const header = document.querySelector('h1.text-center');
-                    if (header) {
-                        header.textContent = graph.title;
-                    }
-                }
+    // Add mouse event listeners to track mouse state
+    svg.on("mousedown", function() {
+        app.state.isMouseDown = true;
 
-                initializeGraph(graph);
-            })
-            .catch(error => {
-                console.error('Error loading graph data:', error);
-                showStatus('Failed to load graph data. Retrying in 5 seconds...', 'error');
-                // Retry after 5 seconds
-                setTimeout(loadGraphData, 5000);
-            });
-    }
+        // Clear any pending tooltip
+        if (app.state.tooltipTimeout) {
+            clearTimeout(app.state.tooltipTimeout);
+            app.state.tooltipTimeout = null;
+        }
 
-    // Initial graph load
-    loadGraphData();
+        // Hide any visible tooltip immediately
+        tooltip.transition().duration(0).style("opacity", 0);
+    });
 
-    // Initialize the graph visualization
-    function initializeGraph(graph) {
+    svg.on("mouseup", function() {
+        app.state.isMouseDown = false;
+    });
+
+    // Ensure mouse up is detected even if released outside the SVG
+    document.addEventListener("mouseup", function() {
+        app.state.isMouseDown = false;
+    });
+
+    // Render a graph from data
+    function updateGraph(graph) {
         // Ensure graph has nodes and links arrays
         if (!graph.nodes) graph.nodes = [];
         if (!graph.links) graph.links = [];
@@ -109,10 +84,10 @@ document.addEventListener('DOMContentLoaded', function() {
         simulation = d3.forceSimulation(graph.nodes)
             .force("link", d3.forceLink(graph.links)
                 .id(d => d.id)
-                .distance(200)) // Increased for better spacing with larger nodes
+                .distance(200))
             .force("charge", d3.forceManyBody().strength(-800))
             .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collide", d3.forceCollide().radius(60)) // Increased collision radius
+            .force("collide", d3.forceCollide().radius(60))
             .force("x", d3.forceX(width / 2).strength(0.1))
             .force("y", d3.forceY(height / 2).strength(0.1));
 
@@ -135,15 +110,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 .on("start", dragStarted)
                 .on("drag", dragged)
                 .on("end", dragEnded))
-            .on("click", nodeClicked); // Add click handler
+            .on("click", nodeClicked);
 
         // Add square nodes with text wrapping
         node.append("rect")
-            .attr("width", d => Math.max(100, d.label ? d.label.length * 8 : 100)) // Dynamic width based on text length
-            .attr("height", 60) // Fixed height
-            .attr("x", d => -Math.max(100, d.label ? d.label.length * 8 : 100) / 2) // Center horizontally
-            .attr("y", -30) // Center vertically
-            .attr("rx", 6) // Rounded corners
+            .attr("width", d => Math.max(100, d.label ? d.label.length * 8 : 100))
+            .attr("height", 60)
+            .attr("x", d => -Math.max(100, d.label ? d.label.length * 8 : 100) / 2)
+            .attr("y", -30)
+            .attr("rx", 6)
             .attr("ry", 6)
             .attr("fill", d => {
                 if (d.category === 'A') return "#ff7f0e";
@@ -194,39 +169,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 .text(line);
         });
 
-        // Add mouse event listeners to track mouse state
-        svg.on("mousedown", function() {
-            isMouseDown = true;
-
-            // Clear any pending tooltip
-            if (tooltipTimeout) {
-                clearTimeout(tooltipTimeout);
-                tooltipTimeout = null;
-            }
-
-            // Hide any visible tooltip immediately
-            tooltip.transition().duration(0).style("opacity", 0);
-        });
-
-        svg.on("mouseup", function() {
-            isMouseDown = false;
-        });
-
-        // Add this to ensure mouse up is detected even if released outside the SVG
-        document.addEventListener("mouseup", function() {
-            isMouseDown = false;
-        });
-
         // Add tooltip events
         node.on("mouseover", function(event, d) {
             // Don't show tooltip if mouse is pressed (during dragging or clicking)
-            if (isMouseDown) return;
+            if (app.state.isMouseDown) return;
 
             // Clear any existing timeout
-            if (tooltipTimeout) clearTimeout(tooltipTimeout);
+            if (app.state.tooltipTimeout) clearTimeout(app.state.tooltipTimeout);
 
             // Set a timeout to show the tooltip after a delay
-            tooltipTimeout = setTimeout(() => {
+            app.state.tooltipTimeout = setTimeout(() => {
                 tooltip.transition()
                     .duration(200)
                     .style("opacity", .9);
@@ -246,9 +198,9 @@ document.addEventListener('DOMContentLoaded', function() {
         })
         .on("mouseout", function() {
             // Clear the timeout if mouse leaves before the tooltip is shown
-            if (tooltipTimeout) {
-                clearTimeout(tooltipTimeout);
-                tooltipTimeout = null;
+            if (app.state.tooltipTimeout) {
+                clearTimeout(app.state.tooltipTimeout);
+                app.state.tooltipTimeout = null;
             }
 
             // Hide the tooltip
@@ -262,3 +214,102 @@ document.addEventListener('DOMContentLoaded', function() {
             link
                 .attr("x1", d => d.source.x)
                 .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+
+            node.attr("transform", d => `translate(${d.x},${d.y})`);
+        });
+    }
+
+    // Handle node click to show details
+    function nodeClicked(event, d) {
+        // Prevent event bubbling
+        event.stopPropagation();
+
+        // Deselect current node if it's the same one
+        if (app.state.selectedNode === d.id) {
+            app.state.selectedNode = null;
+            app.elements.nodeDetails.classList.add('d-none');
+            return;
+        }
+
+        // Update selected node
+        app.state.selectedNode = d.id;
+
+        // Show the details panel
+        app.elements.nodeDetails.classList.remove('d-none');
+        app.elements.nodeDetailsTitle.textContent = d.label || d.id || "Node Details";
+
+        // Format node details
+        let detailsHTML = `
+            <p><strong>ID:</strong> ${d.id}</p>
+            <p><strong>Type:</strong> ${d.type || "Not specified"}</p>
+            <p><strong>Category:</strong> ${d.category || "Not specified"}</p>
+        `;
+
+        if (d.description) {
+            detailsHTML += `<hr><h6>Description</h6><div>${d.description.replace(/\n/g, '<br>')}</div>`;
+        }
+
+        app.elements.nodeDetailsContent.innerHTML = detailsHTML;
+    }
+
+    // Drag functions for nodes
+    function dragStarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+    }
+
+    function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+    }
+
+    function dragEnded(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        if (!app.state.physicsEnabled) {
+            d.fx = event.x;
+            d.fy = event.y;
+        } else {
+            d.fx = null;
+            d.fy = null;
+        }
+    }
+
+    // Reset zoom function
+    function resetZoom() {
+        svg.transition()
+            .duration(750)
+            .call(zoom.transform, d3.zoomIdentity);
+    }
+
+    // Toggle physics simulation
+    function togglePhysics(enabled) {
+        if (enabled) {
+            // Release fixed positions
+            if (node) {
+                node.each(d => {
+                    d.fx = null;
+                    d.fy = null;
+                });
+                simulation.alpha(0.3).restart();
+            }
+        } else {
+            // Fix nodes in current positions
+            if (node) {
+                node.each(d => {
+                    d.fx = d.x;
+                    d.fy = d.y;
+                });
+            }
+        }
+    }
+
+    // Return public API
+    return {
+        updateGraph,
+        resetZoom,
+        togglePhysics
+    };
+}

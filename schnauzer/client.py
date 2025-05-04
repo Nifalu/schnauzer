@@ -5,9 +5,7 @@ import atexit
 import networkx
 
 class VisualizationClient:
-    """
-    Client for sending graph data to the visualization server.
-    """
+    """Client for sending graph data to the visualization server."""
 
     def __init__(self, host='localhost', port=8086):
         """Initialize the visualization client."""
@@ -31,11 +29,10 @@ class VisualizationClient:
             self.socket = self.context.socket(zmq.REQ)
             self.socket.setsockopt(zmq.LINGER, 0)  # Don't wait on close
             self.socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout for future operations
-            print(f"Trying to connect to visualization server at {self.host}:{self.port}")
-            self.socket.connect(f"tcp://{self.host}:{self.port}")
 
-            # ZeroMQ connect() is non-blocking by default
-            print(f"Connected to visualization server at {self.host}:{self.port}")
+            print(f"Trying to connect to visualization server at {self.host}:{self.port} ... ", end = '')
+            self.socket.connect(f"tcp://{self.host}:{self.port}")
+            print("Success!")
 
             self.connected = True
             return True
@@ -163,6 +160,8 @@ class VisualizationClient:
         for node, data in graph.nodes(data=True):
             labels = {}
             for key, value in data.items():
+                if key in ['name', 'type']:
+                    continue # store them separately
                 if node_labels and key in node_labels: # add selection
                     labels[key] = make_serializable(value)
                 else: # add all
@@ -170,8 +169,8 @@ class VisualizationClient:
 
 
             node_data = {
-                'id': str(node),
                 'name': data.get('name', data.get('label', str(node))), # Try to find a name or label
+                'type': data.get('type', 'not set'),
                 'labels': labels,
                 'parents': [],
                 'children': []
@@ -203,30 +202,30 @@ class VisualizationClient:
 
             labels = {}
             for key, value in data.items():
+                if key in ['name', 'type']:
+                    continue # store them separately
                 if edge_labels and key in edge_labels: # add selection
                     labels[key] = make_serializable(value)
                 else: # add all
                     labels[key] = make_serializable(value)
 
             link_data = {
+                'name': data.get('name', data.get('label')),
+                'type': data.get('type', 'not set'),
                 'source': str(source),
                 'target': str(target),
                 'labels': labels
             }
 
-            name = data.get('name', data.get('label'))
-            if name:
-                link_data['name'] = name
-
             json_data['edges'].append(link_data)
 
         if type_color_map:
             for node_data in json_data['nodes']:
-                node_type = node_data.get('labels').get('type')
+                node_type = node_data.get('type')
                 if node_type:
                     node_data['color'] = type_color_map.get(node_type, '#a3a3a3') # Light gray
             for edge_data in json_data['edges']:
-                edge_type = edge_data.get('labels').get('type')
+                edge_type = edge_data.get('type')
                 if edge_type:
                     edge_data['color'] = type_color_map.get(edge_type, '#a3a3a3') # light gray
 

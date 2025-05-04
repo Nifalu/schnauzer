@@ -74,36 +74,45 @@ function initializeVisualization() {
         app.state.isMouseDown = false;
     });
 
-    function showTooltip(event, d) {
+    function showNodeTooltip(event, d) {
         // Don't show tooltip if mouse is pressed (during dragging)
         if (app.state.isMouseDown) return;
 
         // Set current node
         currentTooltipNode = d;
 
+        let html = ``
+
+        html += `<h4>${escapeHTML(d.name || "Node")}</h4>`;
+
         // Format the description for hover tooltip
-        const description = d.description || "No description available";
-        const formattedDescription = description.length > 150 ?
-            description.substring(0, 147) + "..." :
-            description;
+        if (d.description) {
+            let description = d.description;
+            description += d.description.length > 150 ?
+                escapeHTML(description.substring(0, 147) + "...") :
+                escapeHTML(description);
+            html += `
+                <hr>
+                <h6>Description</h6>
+                <div class="node-description">${description}</div>
+            `;
+        }
 
         // Format parent and child names for tooltip using pre-calculated data
-        const parentNames = d.parents && d.parents.length > 0 ?
-            d.parents.map(p => p.name || p.id).join(', ') :
-            "None";
+        if (d.parents && d.parents.length > 0) {
+            html += `<p><strong>Parents:</strong><br>`;
+            html += escapeHTML(d.parents.map(p => p.name).join('\n'));
+            html += `</p>`;
+        }
 
-        const childrenNames = d.children && d.children.length > 0 ?
-            d.children.map(c => c.name || c.id).join(', ') :
-            "None";
+        if (d.children && d.children.length > 0) {
+            html += `<p><strong>Children:</strong><br>`;
+            html += escapeHTML(d.children.map(p => p.name).join('\n'));
+            html += `</p>`;
+        }
 
         // Update tooltip content with enhanced information
-        tooltip.html(`
-            <h4>${escapeHTML(d.name) || d.id || "Unknown"}</h4>
-            <p><strong>Type:</strong> ${d.type || "Not specified"}</p>
-            <p><strong>Parents:</strong> ${escapeHTML(parentNames)}</p>
-            <p><strong>Children:</strong> ${escapeHTML(childrenNames)}</p>
-            <div>${escapeHTML(formattedDescription.replace(/\n/g, '<br>'))}</div>
-        `);
+        tooltip.html(html);
 
         // Position the tooltip
         tooltip
@@ -129,9 +138,9 @@ function initializeVisualization() {
 
         // Get source and target names
         const sourceName = typeof d.source === 'object' ?
-            (d.source.name || d.source.id) : d.source;
+            (d.source.name) : d.source;
         const targetName = typeof d.target === 'object' ?
-            (d.target.name || d.target.id) : d.target;
+            (d.target.name) : d.target;
 
         // Update tooltip content
         tooltip.html(`
@@ -224,7 +233,7 @@ function initializeVisualization() {
         // Set up force simulation
         simulation = d3.forceSimulation(graph.nodes)
             .force("link", d3.forceLink(graph.edges)
-                .id(d => d.id)
+                .id(d => d.name)
                 .distance(200)
                 .strength(0.5))
             .force("charge", d3.forceManyBody()
@@ -297,8 +306,6 @@ function initializeVisualization() {
                 .on("end", dragEnded))
             .on("click", nodeClicked);
 
-        node.attr("id", d => `node-${d.id}`);
-
         // Add square nodes with text wrapping
         node.append("rect")
             .attr("width", d => getNodeDimensions(d).width)
@@ -313,7 +320,7 @@ function initializeVisualization() {
 
         // Add text with improved wrapping
         node.each(function(d) {
-            const label = d.name || d.id || "Unknown";
+            const name = d.name || "Unknown";
             const nodeWidth = getNodeDimensions(d).width - 20; // Padding
             const text = d3.select(this).append("text")
                 .attr("text-anchor", "middle")
@@ -321,7 +328,7 @@ function initializeVisualization() {
                 .attr("pointer-events", "none");
 
             // Improved text wrapping algorithm that handles long words without spaces
-            let words = label.split(/\s+/);
+            let words = name.split(/\s+/);
             let line = "";
             let lineNumber = 0;
             const lineHeight = 20;
@@ -389,7 +396,7 @@ function initializeVisualization() {
         // Add tooltip events with improved responsiveness
         node.on("mouseover", function(event, d) {
             if (!app.state.isMouseDown) {
-                showTooltip(event, d);
+                showNodeTooltip(event, d);
             }
         })
         .on("mousemove", function(event, d) {
@@ -463,7 +470,7 @@ function initializeVisualization() {
         event.stopPropagation();
 
         // Deselect current node if it's the same one
-        if (app.state.selectedNode === d.id) {
+        if (app.state.selectedNode === d.name) {
             app.state.selectedNode = null;
             app.elements.nodeDetails.classList.add('d-none');
             return;
@@ -473,11 +480,11 @@ function initializeVisualization() {
         app.state.selectedEdge = null;
 
         // Update selected node
-        app.state.selectedNode = d.id;
+        app.state.selectedNode = d.name;
 
         // Show the details panel
         app.elements.nodeDetails.classList.remove('d-none');
-        app.elements.nodeDetailsTitle.textContent = d.name || d.id || "Node Details";
+        app.elements.nodeDetailsTitle.textContent = d.name || "Node Details";
 
         // Apply colors to the details panel header
         const headerEl = app.elements.nodeDetails.querySelector('.card-header');

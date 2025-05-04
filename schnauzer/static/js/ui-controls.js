@@ -118,13 +118,13 @@ function initializeUIControls() {
 
             d3.selectAll('.node').each(function(d) {
                 const nodeData = d;
-                const nodeLabel = (nodeData.label || nodeData.id || '').toLowerCase();
+                const nodeLabel = (nodeData.name || '').toLowerCase();
                 const nodeMatch = nodeLabel.includes(searchTerm) ||
                                  (nodeData.type || '').toLowerCase().includes(searchTerm) ||
                                  (nodeData.category || '').toLowerCase().includes(searchTerm);
 
                 if (nodeMatch) {
-                    matchingNodes.add(nodeData.id);
+                    matchingNodes.add(nodeData.name);
                     d3.select(this).style('opacity', 1);
                 } else {
                     d3.select(this).style('opacity', 0.2);
@@ -133,7 +133,7 @@ function initializeUIControls() {
 
             // Highlight links connected to matching nodes
             d3.selectAll('.link').style('opacity', function(d) {
-                if (matchingNodes.has(d.source.id) && matchingNodes.has(d.target.id)) {
+                if (matchingNodes.has(d.source.name) && matchingNodes.has(d.target.name)) {
                     return 0.8;
                 } else {
                     return 0.1;

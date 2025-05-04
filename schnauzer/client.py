@@ -5,7 +5,9 @@ import atexit
 import networkx
 
 class VisualizationClient:
-    """Client for sending graph data to the visualization server."""
+    """
+    Client for sending graph data to the visualization server.
+    """
 
     def __init__(self, host='localhost', port=8086):
         """Initialize the visualization client."""

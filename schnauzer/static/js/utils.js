@@ -1,5 +1,8 @@
 // utils.js - Utility functions for the graph visualization
 function escapeHTML(str = '') {
+    if (str === null || str === undefined) {
+        return null;
+    }
     return String(str)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
@@ -20,36 +23,33 @@ function formatNodeDetails(node) {
     let html = '';
 
     // Show node name at the top
-    html += `<p><strong>Name:</strong> ${escapeHTML(node.name) || escapeHTML(node.id) || 'Unknown'}</p>`;
+    html += `<p><strong>Name:</strong> ${escapeHTML(node.name) || 'Unknown'}</p>`;
+    html += `<p><strong>Type:</strong> ${escapeHTML(node.type) || 'Unknown'}</p>`;
 
     // Show all labels from the dictionary
     if (node.labels && Object.keys(node.labels).length > 0) {
-        html += `<h6>Labels</h6>`;
-
         for (const [key, value] of Object.entries(node.labels)) {
             html += `<p><strong>${escapeHTML(key)}:</strong> ${escapeHTML(value)}</p>`;
         }
     }
 
     // Show parents
-    html += `<p><strong>Parents:</strong> `;
     if (node.parents && Array.isArray(node.parents) && node.parents.length > 0) {
-        const parentNames = node.parents.map(p => p.name || p.id).join(', ');
+        html += `<p><strong>Parents:</strong><br> `;
+        const parentNames = node.parents.map(p => p.name).join('\n');
         html += escapeHTML(parentNames);
-    } else {
-        html += 'None';
+        html += `</p>`;
     }
-    html += `</p>`;
+
 
     // Show children
-    html += `<p><strong>Children:</strong> `;
     if (node.children && Array.isArray(node.children) && node.children.length > 0) {
-        const childrenNames = node.children.map(c => c.name || c.id).join(', ');
+        html += `<p><strong>Children:</strong><br> `;
+        const childrenNames = node.children.map(c => c.name).join(',\n');
         html += escapeHTML(childrenNames);
-    } else {
-        html += 'None';
+        html += `</p>`;
     }
-    html += `</p>`;
+
 
     // Add description if available
     if (node.description) {
@@ -73,19 +73,21 @@ function formatEdgeDetails(edge) {
         html += `<p><strong>Name:</strong> ${escapeHTML(edge.name)}</p>`;
     }
 
+    if (edge.type) {
+        html += `<p><strong>Type:</strong> ${escapeHTML(edge.type)}</p>`;
+    }
+
     // Show source and target
     const sourceNode = typeof edge.source === 'object' ? edge.source :
         (window.SchGraphApp.state.currentGraph?.nodes.find(n => n.name === edge.source) || {name: edge.source});
     const targetNode = typeof edge.target === 'object' ? edge.target :
         (window.SchGraphApp.state.currentGraph?.nodes.find(n => n.name === edge.target) || {name: edge.target});
 
-    html += `<p><strong>From:</strong> ${escapeHTML(sourceNode.name)}</p>`;
-    html += `<p><strong>To:</strong> ${escapeHTML(targetNode.name)}</p>`;
+    html += `<p><strong>Src:</strong> ${escapeHTML(sourceNode.name)}</p>`;
+    html += `<p><strong>Dst:</strong> ${escapeHTML(targetNode.name)}</p>`;
 
     // Show all labels from the dictionary
     if (edge.labels && Object.keys(edge.labels).length > 0) {
-        html += `<h6>Labels</h6>`;
-
         for (const [key, value] of Object.entries(edge.labels)) {
             html += `<p><strong>${escapeHTML(key)}:</strong> ${escapeHTML(value)}</p>`;
         }

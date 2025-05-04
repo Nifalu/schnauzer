@@ -20,14 +20,74 @@ function truncateText(text, maxLength = 150) {
 function formatNodeDetails(node) {
     if (!node) return '';
 
-    let html = `
-        <p><strong>ID:</strong> ${node.id || 'Unknown'}</p>
-    `;
+    let html = '';
 
-    // Add any available properties
-    if (node.label) html += `<p><strong>Label:</strong> ${node.label}</p>`;
-    if (node.type) html += `<p><strong>Type:</strong> ${node.type}</p>`;
-    if (node.category) html += `<p><strong>Category:</strong> ${node.category}</p>`;
+    // Show node name at the top
+    html += `<p><strong>Name:</strong> ${node.name || node.id || 'Unknown'}</p>`;
+
+    // Show all labels from the dictionary
+    if (node.labels && Object.keys(node.labels).length > 0) {
+        html += `<h6>Properties</h6>`;
+
+        for (const [key, value] of Object.entries(node.labels)) {
+            html += `<p><strong>${key}:</strong> ${value}</p>`;
+        }
+    }
+
+    // Get the current graph data
+    const graph = window.SchGraphApp.state.currentGraph;
+    if (!graph || !graph.links) return html;
+
+    // Find parents and children from links
+    const parents = [];
+    const children = [];
+
+    // Process all links to find relationships
+    graph.links.forEach(link => {
+        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+
+        // If this node is the target, the source is a parent
+        if (targetId === node.id) {
+            const parentNode = graph.nodes.find(n => n.id === sourceId);
+            if (parentNode) {
+                parents.push(parentNode);
+            }
+        }
+
+        // If this node is the source, the target is a child
+        if (sourceId === node.id) {
+            const childNode = graph.nodes.find(n => n.id === targetId);
+            if (childNode) {
+                children.push(childNode);
+            }
+        }
+    });
+
+    // Show relationships section if there are any
+    if (parents.length > 0 || children.length > 0) {
+        html += `<h6>Relationships</h6>`;
+
+        // Show parents
+        html += `<p><strong>Parents:</strong> `;
+        if (parents.length > 0) {
+            const parentNames = parents.map(p => p.name || p.id).join(', ');
+            html += parentNames;
+        } else {
+            html += 'None';
+        }
+        html += `</p>`;
+
+        // Show children
+        html += `<p><strong>Children:</strong> `;
+        if (children.length > 0) {
+            const childrenNames = children.map(c => c.name || c.id).join(', ');
+            html += childrenNames;
+        } else {
+            html += 'None';
+        }
+        html += `</p>`;
+    }
 
     // Add description if available
     if (node.description) {
@@ -38,18 +98,71 @@ function formatNodeDetails(node) {
         `;
     }
 
-    // Add any additional properties
-    const standardProps = ['id', 'label', 'type', 'category', 'description'];
-    const additionalProps = Object.keys(node).filter(key => !standardProps.includes(key));
-
-    if (additionalProps.length > 0) {
-        html += `<hr><h6>Additional Properties</h6>`;
-        additionalProps.forEach(key => {
-            html += `<p><strong>${key}:</strong> ${node[key]}</p>`;
-        });
-    }
-
     return html;
+}
+// Helper functions
+
+function isComplexValue(value) {
+    return (typeof value === 'object' && value !== null) ||
+           (typeof value === 'string' && value.length > 100);
+}
+
+function formatValue(value) {
+    if (value === null || value === undefined) {
+        return '<em>None</em>';
+    } else if (typeof value === 'boolean') {
+        return value ? 'True' : 'False';
+    } else if (typeof value === 'number') {
+        // Format address-like numbers as hex
+        if (value > 1000000) {
+            return '0x' + value.toString(16);
+        }
+        return value.toString();
+    } else {
+        // Basic string escaping
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+}
+
+function formatComplexValue(value) {
+    if (typeof value === 'object' && value !== null) {
+        try {
+            // Pretty print JSON with syntax highlighting
+            const json = JSON.stringify(value, null, 2);
+
+            // Simple syntax highlighting
+            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+                let cls = 'text-primary'; // string
+                if (/^"/.test(match)) {
+                    if (/:$/.test(match)) {
+                        cls = 'text-dark'; // key
+                    }
+                } else if (/true|false/.test(match)) {
+                    cls = 'text-success'; // boolean
+                } else if (/null/.test(match)) {
+                    cls = 'text-danger'; // null
+                } else {
+                    cls = 'text-info'; // number
+                }
+                return '<span class="' + cls + '">' + match + '</span>';
+            }).replace(/\n/g, '<br>').replace(/\s{2}/g, '&nbsp;&nbsp;');
+        } catch (e) {
+            // Fallback for objects that can't be stringified
+            return `<span class="text-danger">Complex object: ${e.message}</span>`;
+        }
+    } else if (typeof value === 'string') {
+        // For long strings
+        return value
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/\n/g, '<br>');
+    } else {
+        return formatValue(value);
+    }
 }
 
 /**

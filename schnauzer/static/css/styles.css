@@ -19,9 +19,14 @@
     transition: transform 0.2s ease;
 }
 
-.link {
-    stroke: #999;
-    stroke-opacity: 0.6;
+/* Additional styles for node properties */
+.node-properties {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.node-properties .collapse {
+    transition: all 0.2s ease;
 }
 
 /* Text styling for nodes */
@@ -29,6 +34,32 @@
     font-size: 12px;
     font-weight: bold;
     pointer-events: none;
+}
+
+/* Styles for JSON syntax highlighting */
+.node-properties .text-primary {
+    color: #6610f2 !important;  /* strings */
+}
+
+.node-properties .text-dark {
+    font-weight: bold;  /* keys */
+}
+
+.node-properties .text-success {
+    color: #198754 !important;  /* booleans */
+}
+
+.node-properties .text-info {
+    color: #0dcaf0 !important;  /* numbers */
+}
+
+.node-properties .text-danger {
+    color: #dc3545 !important;  /* null values */
+}
+
+.link {
+    stroke: #999;
+    stroke-opacity: 0.6;
 }
 
 .graph-tooltip {

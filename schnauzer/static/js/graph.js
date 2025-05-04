@@ -88,7 +88,7 @@ function initializeVisualization() {
 
         // Update tooltip content
         tooltip.html(`
-            <h4>${d.label || d.id || "Unknown"}</h4>
+            <h4>${d.name || d.id || "Unknown"}</h4>
             <p><strong>Type:</strong> ${d.type || "Not specified"}</p>
             <div>${formattedDescription.replace(/\n/g, '<br>')}</div>
         `);
@@ -145,11 +145,11 @@ function initializeVisualization() {
             .force("link", d3.forceLink(graph.links)
                 .id(d => d.id)
                 .distance(200))
-            .force("charge", d3.forceManyBody().strength(-800))
+            .force("charge", d3.forceManyBody().strength(-1200))
             .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collide", d3.forceCollide().radius(60))
-            .force("x", d3.forceX(width / 2).strength(0.1))
-            .force("y", d3.forceY(height / 2).strength(0.1));
+            .force("collide", d3.forceCollide().radius(80))
+            .force("x", d3.forceX(width / 2).strength(0.07))
+            .force("y", d3.forceY(height / 2).strength(0.07));
 
         // Create links
         link = g.selectAll(".link")
@@ -183,17 +183,17 @@ function initializeVisualization() {
             .attr("rx", 6)
             .attr("ry", 6)
             .attr("fill", d => {
-                if (d.category === 'A') return "#ff7f0e";
-                if (d.category === 'B') return "#1f77b4";
-                if (d.category === 'C') return "#2ca02c";
-                return "#9467bd";
+                // Color based on node type (root, normal, leaf)
+                if (d.type === 'root') return "#b62c0e";  // Blue for root nodes
+                if (d.type === 'leaf') return "#176c22";  // Green for leaf nodes
+                return "#1734bd";  // Orange for normal nodes
             })
             .attr("stroke", "#fff")
             .attr("stroke-width", 2);
 
         // Add text with wrapping
         node.each(function(d) {
-            const label = d.label || d.id || "Unknown";
+            const label = d.name || d.id || "Unknown";
             const nodeWidth = Math.max(100, label.length * 8) - 20; // Padding
             const text = d3.select(this).append("text")
                 .attr("text-anchor", "middle")
@@ -321,20 +321,10 @@ function initializeVisualization() {
 
         // Show the details panel
         app.elements.nodeDetails.classList.remove('d-none');
-        app.elements.nodeDetailsTitle.textContent = d.label || d.id || "Node Details";
+        app.elements.nodeDetailsTitle.textContent = d.name || d.id || "Node Details";
 
-        // Format node details
-        let detailsHTML = `
-            <p><strong>ID:</strong> ${d.id}</p>
-            <p><strong>Type:</strong> ${d.type || "Not specified"}</p>
-            <p><strong>Category:</strong> ${d.category || "Not specified"}</p>
-        `;
-
-        if (d.description) {
-            detailsHTML += `<hr><h6>Description</h6><div>${d.description.replace(/\n/g, '<br>')}</div>`;
-        }
-
-        app.elements.nodeDetailsContent.innerHTML = detailsHTML;
+        // Format node details using the utility function
+        app.elements.nodeDetailsContent.innerHTML = formatNodeDetails(d);
     }
 
     // Drag functions for nodes

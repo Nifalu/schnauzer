@@ -2,6 +2,7 @@
 import zmq
 import json
 import atexit
+import networkx
 
 class VisualizationClient:
     """Client for sending graph data to the visualization server."""
@@ -54,7 +55,7 @@ class VisualizationClient:
         if hasattr(self, 'context') and self.context:
             self.context.term()
 
-    def send_graph(self, graph, title=None):
+    def send_graph(self, graph: networkx.Graph, title=None):
         """
         Send networkx graph data to the visualization server.
 
@@ -102,31 +103,84 @@ class VisualizationClient:
             self.socket = None
             return False
 
-    def _convert_graph_to_json(self, graph):
-        """Convert a networkx graph to a JSON-serializable format."""
+    # Modification for client.py _convert_graph_to_json method
+    @staticmethod
+    def _convert_graph_to_json(graph: networkx.Graph,
+                               node_labels: list[str] = None,
+                               edge_labels: list[str] = None):
+        """
+        Convert a networkx graph to a JSON-serializable format.
+        Pass a label list if you want only specific labels to be visualized.
+        """
         # Basic structure
-        data = {
+        json_data = {
             'nodes': [],
-            'links': []
+            'edges': []
         }
 
-        # Add nodes
-        for node_id in graph.nodes():
-            node_data = {
-                'id': str(node_id),
-                'label': graph.nodes[node_id].get('label', str(node_id)),
-                'type': graph.nodes[node_id].get('type', 'default'),
-                'category': graph.nodes[node_id].get('category', 'default'),
-                'description': graph.nodes[node_id].get('description', '')
-            }
-            data['nodes'].append(node_data)
+        # Helper function to make values JSON serializable
+        def make_serializable(any_value):
+            if not any_value:
+                raise ValueError("This should never be None here... should be checked before calling this")
 
-        # Add links
-        for source, target in graph.edges():
-            link_data = {
-                'source': str(source),
-                'target': str(target)
-            }
-            data['links'].append(link_data)
+            # return atomic values
+            if isinstance(any_value, (str, int, float, bool)):
+                return any_value
 
-        return data
+            # handle structured data
+            elif hasattr(any_value, 'to_dict') and callable(any_value.to_dict):
+                result = {}
+                for k, v in any_value.to_dict():
+                    result[k] = make_serializable(v)
+                return result
+
+            elif hasattr(any_value, '__dict__'):
+                # Extract meaningful attributes for better representation
+                result = {}
+                for k, v in any_value.__dict__.items():
+                    if not k.startswith('_'):  # Skip private attributes
+                        result[k] = make_serializable(v)
+                return result
+
+            # Default fallback
+            return str(any_value)
+
+
+        try:
+            # add nodes
+            for node, data in graph.nodes(data=True):
+                labels = {}
+                for key, value in data.items():
+                    if value and node_labels is not None and key in node_labels:
+                        labels[key] = make_serializable(value)
+
+                node_data = {
+                    'id': str(node),
+                    'name': data.get('name', data.get('label', str(node))), # Try to find a name or label
+                    'labels': labels
+                }
+                json_data['nodes'].append(node_data)
+
+            # Add edges:
+            for source, target, data in graph.edges(data=True):
+                labels = {}
+                for key, value in data.items():
+                    if value and edge_labels is not None and key in edge_labels:
+                        labels[key] = make_serializable(value)
+
+                link_data = {
+                    'source': str(source),
+                    'target': str(target),
+                    'labels': labels
+                }
+
+                name = data.get('name', data.get('label'))
+                if name:
+                    link_data['name'] = name
+
+                data['edges'].append(link_data)
+
+        except Exception as e:
+            print(f"Error converting graph to JSON: {e}")
+
+        return json_data

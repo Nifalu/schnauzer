@@ -29,7 +29,7 @@ class Server:
         """
         self.web_port = web_port
         self.backend_port = backend_port
-        self.current_graph = {'nodes': [], 'links': [], 'title': 'NetworkX DiGraph Visualization'}
+        self.current_graph = {'nodes': [], 'edges': [], 'title': 'NetworkX DiGraph Visualization'}
 
         # Backend server attributes
         self.running = False

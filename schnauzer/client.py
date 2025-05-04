@@ -178,7 +178,7 @@ class VisualizationClient:
                 if name:
                     link_data['name'] = name
 
-                data['edges'].append(link_data)
+                json_data['edges'].append(link_data)
 
         except Exception as e:
             print(f"Error converting graph to JSON: {e}")

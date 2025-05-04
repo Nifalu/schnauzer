@@ -6,7 +6,7 @@ function initializeVisualization() {
     const width = app.elements.graphContainer.clientWidth;
     const height = app.elements.graphContainer.clientHeight;
 
-    let svg, zoom; // Declare variables at this scope level
+    let svg, zoom, simulation, node, link;
 
     function getNodeDimensions(node) {
         return {
@@ -126,14 +126,14 @@ function initializeVisualization() {
     function updateGraph(graph) {
         // Ensure graph has nodes and links arrays
         if (!graph.nodes) graph.nodes = [];
-        if (!graph.links) graph.links = [];
+        if (!graph.edges) graph.edges = [];
 
         // Update counters if the app has stats elements
         if (app.elements.nodeCountEl) {
             app.elements.nodeCountEl.textContent = graph.nodes.length;
         }
         if (app.elements.edgeCountEl) {
-            app.elements.edgeCountEl.textContent = graph.links.length;
+            app.elements.edgeCountEl.textContent = graph.edges.length;
         }
 
         // Clear existing graph elements
@@ -142,7 +142,7 @@ function initializeVisualization() {
 
         // Set up force simulation
         simulation = d3.forceSimulation(graph.nodes)
-            .force("link", d3.forceLink(graph.links)
+            .force("link", d3.forceLink(graph.edges)
                 .id(d => d.id)
                 .distance(200))
             .force("charge", d3.forceManyBody().strength(-1200))
@@ -153,7 +153,7 @@ function initializeVisualization() {
 
         // Create links
         link = g.selectAll(".link")
-            .data(graph.links)
+            .data(graph.edges)
             .enter()
             .append("line")
             .attr("class", "link")

@@ -23,11 +23,11 @@ function formatNodeDetails(node) {
     let html = '';
 
     // Show node name at the top
-    html += `<p><strong>Name:</strong> ${node.name || node.id || 'Unknown'}</p>`;
+    html += `<p><strong>Name:</strong> ${node.name || 'Unknown'}</p>`;
 
     // Show all labels from the dictionary
     if (node.labels && Object.keys(node.labels).length > 0) {
-        html += `<h6>Properties</h6>`;
+        html += `<h6>Labels</h6>`;
 
         for (const [key, value] of Object.entries(node.labels)) {
             html += `<p><strong>${key}:</strong> ${value}</p>`;
@@ -43,7 +43,7 @@ function formatNodeDetails(node) {
     const children = [];
 
     // Process all links to find relationships
-    graph.links.forEach(link => {
+    graph.edges.forEach(link => {
         const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
         const targetId = typeof link.target === 'object' ? link.target.id : link.target;
 

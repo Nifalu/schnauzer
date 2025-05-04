@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         // Update edge/link count
-        const edgeCount = graphData.links ? graphData.links.length : 0;
+        const edgeCount = graphData.edges ? graphData.edges.length : 0;
         if (app.elements.edgeCountEl) {
             app.elements.edgeCountEl.textContent = edgeCount;
         }

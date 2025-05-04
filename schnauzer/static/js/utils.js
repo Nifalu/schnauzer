@@ -1,4 +1,12 @@
 // utils.js - Utility functions for the graph visualization
+function escapeHTML(str = '') {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>');
+
+}
 
 
 /**
@@ -7,89 +15,54 @@
  * @returns {string} HTML formatted node details
  */
 function formatNodeDetails(node) {
-    if (!node) return '';
+    // Debug output to see what data is actually being received
+    if (!node) return '<p>No node data available</p>';
 
     let html = '';
 
     // Show node name at the top
-    html += `<p><strong>Name:</strong> ${node.name || 'Unknown'}</p>`;
+    html += `<p><strong>Name:</strong> ${escapeHTML(node.name) || escapeHTML(node.id) || 'Unknown'}</p>`;
 
     // Show all labels from the dictionary
     if (node.labels && Object.keys(node.labels).length > 0) {
         html += `<h6>Labels</h6>`;
 
         for (const [key, value] of Object.entries(node.labels)) {
-            html += `<p><strong>${key}:</strong> ${value}</p>`;
+            html += `<p><strong>${escapeHTML(key)}:</strong> ${escapeHTML(value)}</p>`;
         }
     }
 
-    // Get the current graph data
-    const graph = window.SchGraphApp.state.currentGraph;
-    if (!graph || !graph.edges) return html;
-
-    // Find parents and children from links
-    const parents = [];
-    const children = [];
-
-    // Process all links to find relationships
-    graph.edges.forEach(link => {
-        const sourceId = typeof link.source === 'object' ? link.source.name : link.source;
-        const targetId = typeof link.target === 'object' ? link.target.name : link.target;
-
-        // If this node is the target, the source is a parent
-        if (targetId === node.name) {
-            const parentNode = graph.nodes.find(n => n.name === sourceId);
-            if (parentNode) {
-                parents.push(parentNode);
-            }
-        }
-
-        // If this node is the source, the target is a child
-        if (sourceId === node.name) {
-            const childNode = graph.nodes.find(n => n.name === targetId);
-            if (childNode) {
-                children.push(childNode);
-            }
-        }
-    });
-
-    // Show relationships section if there are any
-    if (parents.length > 0 || children.length > 0) {
-        html += `<h6>Relationships</h6>`;
-
-        // Show parents
-        html += `<p><strong>Parents:</strong> `;
-        if (parents.length > 0) {
-            const parentNames = parents.map(p => p.name).join(', ');
-            html += parentNames;
-        } else {
-            html += 'None';
-        }
-        html += `</p>`;
-
-        // Show children
-        html += `<p><strong>Children:</strong> `;
-        if (children.length > 0) {
-            const childrenNames = children.map(c => c.name).join(', ');
-            html += childrenNames;
-        } else {
-            html += 'None';
-        }
-        html += `</p>`;
+    // Show parents
+    html += `<p><strong>Parents:</strong> `;
+    if (node.parents && Array.isArray(node.parents) && node.parents.length > 0) {
+        const parentNames = node.parents.map(p => p.name || p.id).join(', ');
+        html += escapeHTML(parentNames);
+    } else {
+        html += 'None';
     }
+    html += `</p>`;
+
+    // Show children
+    html += `<p><strong>Children:</strong> `;
+    if (node.children && Array.isArray(node.children) && node.children.length > 0) {
+        const childrenNames = node.children.map(c => c.name || c.id).join(', ');
+        html += escapeHTML(childrenNames);
+    } else {
+        html += 'None';
+    }
+    html += `</p>`;
 
     // Add description if available
     if (node.description) {
         html += `
             <hr>
             <h6>Description</h6>
-            <div class="node-description">${node.description.replace(/\n/g, '<br>')}</div>
+            <div class="node-description">${escapeHTML(node.description)}</div>
         `;
     }
 
     return html;
 }
-
 
 function formatEdgeDetails(edge) {
     if (!edge) return '';
@@ -98,7 +71,7 @@ function formatEdgeDetails(edge) {
 
     // Show edge name at the top if available
     if (edge.name) {
-        html += `<p><strong>Name:</strong> ${edge.name}</p>`;
+        html += `<p><strong>Name:</strong> ${escapeHTML(edge.name)}</p>`;
     }
 
     // Show source and target
@@ -107,15 +80,15 @@ function formatEdgeDetails(edge) {
     const targetNode = typeof edge.target === 'object' ? edge.target :
         (window.SchGraphApp.state.currentGraph?.nodes.find(n => n.name === edge.target) || {name: edge.target});
 
-    html += `<p><strong>From:</strong> ${sourceNode.name}</p>`;
-    html += `<p><strong>To:</strong> ${targetNode.name}</p>`;
+    html += `<p><strong>From:</strong> ${escapeHTML(sourceNode.name)}</p>`;
+    html += `<p><strong>To:</strong> ${escapeHTML(targetNode.name)}</p>`;
 
     // Show all labels from the dictionary
     if (edge.labels && Object.keys(edge.labels).length > 0) {
         html += `<h6>Labels</h6>`;
 
         for (const [key, value] of Object.entries(edge.labels)) {
-            html += `<p><strong>${key}:</strong> ${value}</p>`;
+            html += `<p><strong>${escapeHTML(key)}:</strong> ${escapeHTML(value)}</p>`;
         }
     }
 
@@ -124,7 +97,7 @@ function formatEdgeDetails(edge) {
         html += `
             <hr>
             <h6>Description</h6>
-            <div class="node-description">${edge.description.replace(/\n/g, '<br>')}</div>
+            <div class="node-description">${escapeHTML(edge.description)}</div>
         `;
     }
 
@@ -230,4 +203,5 @@ document.addEventListener('DOMContentLoaded', function() {
     window.SchGraphApp.utils.formatNodeDetails = formatNodeDetails;
     window.SchGraphApp.utils.formatEdgeDetails = formatEdgeDetails;
     window.SchGraphApp.utils.exportGraphAsPNG = exportGraphAsPNG;
+    window.SchGraphApp.utils.escapeHTML = escapeHTML;
 });

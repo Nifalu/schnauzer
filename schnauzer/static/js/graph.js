@@ -74,7 +74,6 @@ function initializeVisualization() {
         app.state.isMouseDown = false;
     });
 
-    // Show tooltip function with minimal delay
     function showTooltip(event, d) {
         // Don't show tooltip if mouse is pressed (during dragging)
         if (app.state.isMouseDown) return;
@@ -88,20 +87,30 @@ function initializeVisualization() {
             description.substring(0, 147) + "..." :
             description;
 
-        // Update tooltip content
+        // Format parent and child names for tooltip using pre-calculated data
+        const parentNames = d.parents && d.parents.length > 0 ?
+            d.parents.map(p => p.name || p.id).join(', ') :
+            "None";
+
+        const childrenNames = d.children && d.children.length > 0 ?
+            d.children.map(c => c.name || c.id).join(', ') :
+            "None";
+
+        // Update tooltip content with enhanced information
         tooltip.html(`
-            <h4>${d.name || d.id || "Unknown"}</h4>
+            <h4>${escapeHTML(d.name) || d.id || "Unknown"}</h4>
             <p><strong>Type:</strong> ${d.type || "Not specified"}</p>
-            <div>${formattedDescription.replace(/\n/g, '<br>')}</div>
+            <p><strong>Parents:</strong> ${escapeHTML(parentNames)}</p>
+            <p><strong>Children:</strong> ${escapeHTML(childrenNames)}</p>
+            <div>${escapeHTML(formattedDescription.replace(/\n/g, '<br>'))}</div>
         `);
 
-        // Position the tooltip near the cursor but not directly under it
-        // to prevent flickering when moving between elements
+        // Position the tooltip
         tooltip
             .style("left", (event.pageX + 15) + "px")
             .style("top", (event.pageY - 30) + "px");
 
-        // Make tooltip visible with a very short transition
+        // Make tooltip visible
         tooltip
             .transition()
             .duration(50)
@@ -126,9 +135,9 @@ function initializeVisualization() {
 
         // Update tooltip content
         tooltip.html(`
-            <h4>${d.name || "Edge"}</h4>
-            <p><strong>From:</strong> ${sourceName}</p>
-            <p><strong>To:</strong> ${targetName}</p>
+            <h4>${escapeHTML(d.name) || "Edge"}</h4>
+            <p><strong>From:</strong> ${escapeHTML(sourceName)}</p>
+            <p><strong>To:</strong> ${escapeHTML(targetName)}</p>
         `);
 
         // Position the tooltip near the cursor

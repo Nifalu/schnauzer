@@ -146,41 +146,73 @@ class VisualizationClient:
             return str(any_value)
 
 
-        try:
-            # add nodes
-            for node, data in graph.nodes(data=True):
-                labels = {}
-                for key, value in data.items():
-                    if value and node_labels is not None and key in node_labels:
-                        labels[key] = make_serializable(value)
 
-                node_data = {
-                    'id': str(node),
-                    'name': data.get('name', data.get('label', str(node))), # Try to find a name or label
-                    'labels': labels
-                }
-                json_data['nodes'].append(node_data)
+        node_map = {} # track relationships
 
-            # Add edges:
-            for source, target, data in graph.edges(data=True):
-                labels = {}
-                for key, value in data.items():
-                    if value and edge_labels is not None and key in edge_labels:
-                        labels[key] = make_serializable(value)
+        # add nodes
+        for node, data in graph.nodes(data=True):
+            labels = {}
+            for key, value in data.items():
+                if value and node_labels is not None and key in node_labels:
+                    labels[key] = make_serializable(value)
 
-                link_data = {
-                    'source': str(source),
-                    'target': str(target),
-                    'labels': labels
-                }
+            node_data = {
+                'id': str(node),
+                'name': data.get('name', data.get('label', str(node))), # Try to find a name or label
+                'labels': labels,
+                'parents': [],
+                'children': []
+            }
+            node_map[str(node)] = node_data
+            json_data['nodes'].append(node_data)
 
-                name = data.get('name', data.get('label'))
-                if name:
-                    link_data['name'] = name
+        # Add edges:
+        for source, target, data in graph.edges(data=True):
+            source_id = str(source)
+            target_id = str(target)
 
-                json_data['edges'].append(link_data)
+            # Add relationship data
+            if source_id in node_map and target_id in node_map:
+                # Add target to source's children
+                source_node = node_map[source_id]
+                target_node = node_map[target_id]
 
-        except Exception as e:
-            print(f"Error converting graph to JSON: {e}")
+                source_node['children'].append({
+                    'id': target_id,
+                    'name': target_node['name']
+                })
+
+                # Add source to target's parents
+                target_node['parents'].append({
+                    'id': source_id,
+                    'name': source_node['name']
+                })
+
+            labels = {}
+            for key, value in data.items():
+                if value and edge_labels is not None and key in edge_labels:
+                    labels[key] = make_serializable(value)
+
+            link_data = {
+                'source': str(source),
+                'target': str(target),
+                'labels': labels
+            }
+
+            name = data.get('name', data.get('label'))
+            if name:
+                link_data['name'] = name
+
+            json_data['edges'].append(link_data)
+
+        # Determine node types based on connections
+        for node_data in json_data['nodes']:
+            if not node_data['parents'] and node_data['children']:
+                node_data['type'] = 'root'
+            elif node_data['parents'] and not node_data['children']:
+                node_data['type'] = 'leaf'
+            else:
+                node_data['type'] = 'normal'
+
 
         return json_data

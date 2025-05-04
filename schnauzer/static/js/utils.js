@@ -5,7 +5,6 @@ function escapeHTML(str = '') {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/\n/g, '<br>');
-
 }
 
 
@@ -103,6 +102,42 @@ function formatEdgeDetails(edge) {
 
     return html;
 }
+
+// Determine if text should be black or white based on background color
+function getTextColor(bgColor) {
+    // If no color provided, default to white
+    if (!bgColor) return "#ffffff";
+
+    // Remove the '#' if it exists
+    const color = bgColor.startsWith('#') ? bgColor.substring(1) : bgColor;
+
+    // Handle 3-digit hex codes by expanding to 6 digits
+    const normalizedColor = color.length === 3
+        ? color[0] + color[0] + color[1] + color[1] + color[2] + color[2]
+        : color;
+
+    // Convert to RGB - fixed substring parameters
+    const r = parseInt(normalizedColor.substring(0, 2), 16);
+    const g = parseInt(normalizedColor.substring(2, 4), 16);
+    const b = parseInt(normalizedColor.substring(4, 6), 16);
+
+    // Calculate relative luminance (perceived brightness)
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+    // Use white text for dark backgrounds, black text for light backgrounds
+    return luminance > 0.5 ? "#000000" : "#ffffff";
+}
+
+function getNodeTextColor(node) {
+    const nodeColor = node.color || "#999";
+    return getTextColor(nodeColor);
+}
+
+function getEdgeTextColor(edge) {
+    const edgeColor = edge.color || "#999";
+    return getTextColor(edgeColor);
+}
+
 
 function exportGraphAsPNG() {
     const svgElement = document.querySelector('#graph-container svg');
@@ -204,4 +239,7 @@ document.addEventListener('DOMContentLoaded', function() {
     window.SchGraphApp.utils.formatEdgeDetails = formatEdgeDetails;
     window.SchGraphApp.utils.exportGraphAsPNG = exportGraphAsPNG;
     window.SchGraphApp.utils.escapeHTML = escapeHTML;
+    window.SchGraphApp.utils.getTextColor = getTextColor;
+    window.SchGraphApp.utils.getNodeTextColor = getNodeTextColor;
+    window.SchGraphApp.utils.getEdgeTextColor = getEdgeTextColor;
 });

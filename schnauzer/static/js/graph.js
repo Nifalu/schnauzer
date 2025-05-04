@@ -12,7 +12,7 @@ function initializeVisualization() {
         const label = node.name || node.id || "Unknown";
         // Increase default width and make dynamic calculation more generous
         return {
-            width: Math.max(100, label.length * 5), // Increased from 100 to 120 and multiplier from 8 to 10
+            width: Math.max(100, label.length * 6), // Increased from 100 to 120 and multiplier from 8 to 10
             height: 60
         };
     }
@@ -186,6 +186,41 @@ function initializeVisualization() {
         g.selectAll(".node").remove();
         g.selectAll(".link").remove();
 
+        // Create dynamic markers for different colored edges
+        const defs = svg.select("defs");
+        const colors = new Set();
+
+        // Add default color
+        colors.add("#999");
+
+        // Collect all unique edge colors
+        graph.edges.forEach(edge => {
+            if (edge.color) {
+                colors.add(edge.color);
+            }
+        });
+
+        // Clear existing markers
+        defs.selectAll("marker").remove();
+
+        // Create a marker for each color
+        colors.forEach(color => {
+            const markerId = "arrowhead-" + color.replace('#', '');
+            defs.append("marker")
+                .attr("id", markerId)
+                .attr("viewBox", "-0 -5 10 10")
+                .attr("refX", 0)
+                .attr("refY", 0)
+                .attr("orient", "auto")
+                .attr("markerWidth", 6)
+                .attr("markerHeight", 6)
+                .attr("overflow", "visible")
+                .append("svg:path")
+                .attr("d", "M 0,-5 L 10,0 L 0,5")
+                .attr("fill", color)
+                .style("stroke", "none");
+        });
+
         // Set up force simulation
         simulation = d3.forceSimulation(graph.nodes)
             .force("link", d3.forceLink(graph.edges)
@@ -201,19 +236,38 @@ function initializeVisualization() {
             .force("x", d3.forceX(width / 2).strength(0.07))
             .force("y", d3.forceY(height / 2).strength(0.07));
 
-        // Create links
+        // Create links with wider click/hover areas
         link = g.selectAll(".link")
             .data(graph.edges)
             .enter()
-            .append("line")
+            .append("g")  // Use a group to contain both visible line and invisible click area
+            .attr("class", "link-group");
+
+        // Add the visible line
+        link.append("line")
             .attr("class", "link")
             .attr("stroke-width", 2)
-            .attr("marker-end", "url(#arrowhead)");
+            .attr("stroke", d => d.color || "#999")
+            .attr("marker-end", function(d) {
+                const color = d.color || "#999";
+                const markerId = "arrowhead-" + color.replace('#', '');
+                return "url(#" + markerId + ")";
+            });
 
-        // Add click event and tooltips to edges
+        // Add invisible wider line for easier interaction (10px wide)
+        link.append("line")
+            .attr("class", "link-hitarea")
+            .attr("stroke-width", 10)  // Much wider than the visible line
+            .attr("stroke", "transparent")  // Invisible
+            .attr("stroke-opacity", 0)  // Completely transparent
+            .style("cursor", "pointer");  // Show pointer cursor on hover
+
+        // Add events to the group
         link.on("click", edgeClicked)
             .on("mouseover", function(event, d) {
                 if (!app.state.isMouseDown) {
+                    // Highlight the visible line
+                    d3.select(this).select(".link").attr("stroke-width", 4);
                     showEdgeTooltip(event, d);
                 }
             })
@@ -226,6 +280,8 @@ function initializeVisualization() {
                 }
             })
             .on("mouseout", function() {
+                // Reset line width
+                d3.select(this).select(".link").attr("stroke-width", 2);
                 hideTooltip();
             });
 
@@ -251,12 +307,7 @@ function initializeVisualization() {
             .attr("y", d => -getNodeDimensions(d).height / 2)
             .attr("rx", 6)
             .attr("ry", 6)
-            .attr("fill", d => {
-                // Color based on node type (root, normal, leaf)
-                if (d.type === 'root') return "#b62c0e";  // Blue for root nodes
-                if (d.type === 'leaf') return "#176c22";  // Green for leaf nodes
-                return "#1734bd";  // Orange for normal nodes
-            })
+            .attr("fill", d => d.color)
             .attr("stroke", "#fff")
             .attr("stroke-width", 2);
 
@@ -266,8 +317,7 @@ function initializeVisualization() {
             const nodeWidth = getNodeDimensions(d).width - 20; // Padding
             const text = d3.select(this).append("text")
                 .attr("text-anchor", "middle")
-                .attr("dy", -15)
-                .attr("fill", "#fff")
+                .attr("fill", d => getNodeTextColor(d))
                 .attr("pointer-events", "none");
 
             // Improved text wrapping algorithm that handles long words without spaces
@@ -354,7 +404,6 @@ function initializeVisualization() {
             hideTooltip();
         });
 
-        // Update the simulation tick function to better handle edge cases
         simulation.on("tick", () => {
             link.each(function(d) {
                 // Calculate direction vector between source and target
@@ -366,7 +415,6 @@ function initializeVisualization() {
                 const padding = 12; // Padding before the node boundary
 
                 // Calculate the distance to the rectangle intersection
-                // More reliable approach using linear scaling
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
                 // Using normalized direction for consistent approach
@@ -397,8 +445,8 @@ function initializeVisualization() {
                 const targetX = d.target.x - t * unitDx;
                 const targetY = d.target.y - t * unitDy;
 
-                // Set the line coordinates
-                d3.select(this)
+                // Set the coordinates for both the visible line and hit area
+                d3.select(this).selectAll("line")
                     .attr("x1", d.source.x)
                     .attr("y1", d.source.y)
                     .attr("x2", targetX)
@@ -430,6 +478,13 @@ function initializeVisualization() {
         // Show the details panel
         app.elements.nodeDetails.classList.remove('d-none');
         app.elements.nodeDetailsTitle.textContent = d.name || d.id || "Node Details";
+
+        // Apply colors to the details panel header
+        const headerEl = app.elements.nodeDetails.querySelector('.card-header');
+        if (headerEl) {
+            headerEl.style.backgroundColor = d.color;
+            headerEl.style.color = getTextColor(d.color);
+        }
 
         // Format node details using the utility function
         app.elements.nodeDetailsContent.innerHTML = window.SchGraphApp.utils.formatNodeDetails(d);

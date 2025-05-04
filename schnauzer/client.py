@@ -55,7 +55,11 @@ class VisualizationClient:
         if hasattr(self, 'context') and self.context:
             self.context.term()
 
-    def send_graph(self, graph: networkx.Graph, title=None):
+    def send_graph(self, graph: networkx.Graph,
+                   title=None,
+                   node_labels: list[str] = None,
+                   edge_labels: list[str] = None,
+                   type_color_map: dict[str, str]=None):
         """
         Send networkx graph data to the visualization server.
 
@@ -63,13 +67,18 @@ class VisualizationClient:
             graph: A networkx graph object
             title: Optional title for the visualization
         """
+
         if not self.connected:
             success = self.connect()
             if not success:
                 return False
 
         # Convert networkx graph to JSON-serializable format
-        graph_data = self._convert_graph_to_json(graph)
+        graph_data = self._convert_graph_to_json(
+            graph,
+            node_labels,
+            edge_labels,
+            type_color_map)
 
         # Add title if provided
         if title:
@@ -107,7 +116,8 @@ class VisualizationClient:
     @staticmethod
     def _convert_graph_to_json(graph: networkx.Graph,
                                node_labels: list[str] = None,
-                               edge_labels: list[str] = None):
+                               edge_labels: list[str] = None,
+                               type_color_map: dict[str, str] = None):
         """
         Convert a networkx graph to a JSON-serializable format.
         Pass a label list if you want only specific labels to be visualized.
@@ -121,7 +131,7 @@ class VisualizationClient:
         # Helper function to make values JSON serializable
         def make_serializable(any_value):
             if not any_value:
-                raise ValueError("This should never be None here... should be checked before calling this")
+                return "None"
 
             # return atomic values
             if isinstance(any_value, (str, int, float, bool)):
@@ -145,16 +155,17 @@ class VisualizationClient:
             # Default fallback
             return str(any_value)
 
-
-
         node_map = {} # track relationships
 
         # add nodes
         for node, data in graph.nodes(data=True):
             labels = {}
             for key, value in data.items():
-                if value and node_labels is not None and key in node_labels:
+                if node_labels and key in node_labels: # add selection
                     labels[key] = make_serializable(value)
+                else: # add all
+                    labels[key] = make_serializable(value)
+
 
             node_data = {
                 'id': str(node),
@@ -190,7 +201,9 @@ class VisualizationClient:
 
             labels = {}
             for key, value in data.items():
-                if value and edge_labels is not None and key in edge_labels:
+                if edge_labels and key in edge_labels: # add selection
+                    labels[key] = make_serializable(value)
+                else: # add all
                     labels[key] = make_serializable(value)
 
             link_data = {
@@ -205,14 +218,29 @@ class VisualizationClient:
 
             json_data['edges'].append(link_data)
 
-        # Determine node types based on connections
-        for node_data in json_data['nodes']:
-            if not node_data['parents'] and node_data['children']:
-                node_data['type'] = 'root'
-            elif node_data['parents'] and not node_data['children']:
-                node_data['type'] = 'leaf'
-            else:
-                node_data['type'] = 'normal'
+        if type_color_map:
+            for node_data in json_data['nodes']:
+                node_type = node_data.get('labels').get('type')
+                if node_type:
+                    node_data['color'] = type_color_map.get(node_type, '#a3a3a3') # Light gray
+            for edge_data in json_data['edges']:
+                edge_type = edge_data.get('labels').get('type')
+                if edge_type:
+                    edge_data['color'] = type_color_map.get(edge_type, '#a3a3a3') # light gray
 
+        else:# Determine node types based on connections
+            for node_data in json_data['nodes']:
+                if not node_data['parents'] and node_data['children']:
+                    node_data['type'] = 'root'
+                    node_data['color'] = '#FF0000' # Red
+                elif node_data['parents'] and not node_data['children']:
+                    node_data['type'] = 'leaf'
+                    node_data['color'] = '#00FF00' # Green
+                else:
+                    node_data['type'] = 'normal'
+                    node_data['color'] = '#0000FF' # Blue
+            for edge in json_data['edges']:
+                edge['type'] = 'normal'
+                edge['color'] = "#a3a3a3" # light gray
 
         return json_data

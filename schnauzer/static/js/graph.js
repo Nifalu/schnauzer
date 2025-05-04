@@ -9,8 +9,10 @@ function initializeVisualization() {
     let svg, zoom, simulation, node, link;
 
     function getNodeDimensions(node) {
+        const label = node.name || node.id || "Unknown";
+        // Increase default width and make dynamic calculation more generous
         return {
-            width: Math.max(100, node.label ? node.label.length * 8 : 100),
+            width: Math.max(100, label.length * 5), // Increased from 100 to 120 and multiplier from 8 to 10
             height: 60
         };
     }
@@ -42,7 +44,7 @@ function initializeVisualization() {
         .attr("orient", "auto")
         .attr("markerWidth", 6)
         .attr("markerHeight", 6)
-        .attr("xoverflow", "visible")
+        .attr("overflow", "visible")
         .append("svg:path")
         .attr("d", "M 0,-5 L 10,0 L 0,5")
         .attr("fill", "#999")
@@ -108,6 +110,41 @@ function initializeVisualization() {
         tooltipVisible = true;
     }
 
+    // Show tooltip for edges
+    function showEdgeTooltip(event, d) {
+        // Don't show tooltip if mouse is pressed (during dragging)
+        if (app.state.isMouseDown) return;
+
+        // Set current edge
+        currentTooltipNode = d;
+
+        // Get source and target names
+        const sourceName = typeof d.source === 'object' ?
+            (d.source.name || d.source.id) : d.source;
+        const targetName = typeof d.target === 'object' ?
+            (d.target.name || d.target.id) : d.target;
+
+        // Update tooltip content
+        tooltip.html(`
+            <h4>${d.name || "Edge"}</h4>
+            <p><strong>From:</strong> ${sourceName}</p>
+            <p><strong>To:</strong> ${targetName}</p>
+        `);
+
+        // Position the tooltip near the cursor
+        tooltip
+            .style("left", (event.pageX + 15) + "px")
+            .style("top", (event.pageY - 30) + "px");
+
+        // Make tooltip visible with a very short transition
+        tooltip
+            .transition()
+            .duration(50)
+            .style("opacity", 0.95);
+
+        tooltipVisible = true;
+    }
+
     // Hide tooltip function
     function hideTooltip() {
         // Only transition if tooltip was visible
@@ -144,10 +181,14 @@ function initializeVisualization() {
         simulation = d3.forceSimulation(graph.nodes)
             .force("link", d3.forceLink(graph.edges)
                 .id(d => d.id)
-                .distance(200))
-            .force("charge", d3.forceManyBody().strength(-1200))
+                .distance(200)
+                .strength(0.5))
+            .force("charge", d3.forceManyBody()
+                .strength(-1800)
+                .distanceMin(150)
+                .distanceMax(500))
             .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collide", d3.forceCollide().radius(80))
+            .force("collide", d3.forceCollide().radius(100).strength(1.0))
             .force("x", d3.forceX(width / 2).strength(0.07))
             .force("y", d3.forceY(height / 2).strength(0.07));
 
@@ -159,6 +200,25 @@ function initializeVisualization() {
             .attr("class", "link")
             .attr("stroke-width", 2)
             .attr("marker-end", "url(#arrowhead)");
+
+        // Add click event and tooltips to edges
+        link.on("click", edgeClicked)
+            .on("mouseover", function(event, d) {
+                if (!app.state.isMouseDown) {
+                    showEdgeTooltip(event, d);
+                }
+            })
+            .on("mousemove", function(event, d) {
+                // Update tooltip position if it's for the current edge
+                if (tooltipVisible && currentTooltipNode === d) {
+                    tooltip
+                        .style("left", (event.pageX + 15) + "px")
+                        .style("top", (event.pageY - 30) + "px");
+                }
+            })
+            .on("mouseout", function() {
+                hideTooltip();
+            });
 
         // Create node groups
         node = g.selectAll(".node")
@@ -191,44 +251,80 @@ function initializeVisualization() {
             .attr("stroke", "#fff")
             .attr("stroke-width", 2);
 
-        // Add text with wrapping
+        // Add text with improved wrapping
         node.each(function(d) {
             const label = d.name || d.id || "Unknown";
-            const nodeWidth = Math.max(100, label.length * 8) - 20; // Padding
+            const nodeWidth = getNodeDimensions(d).width - 20; // Padding
             const text = d3.select(this).append("text")
                 .attr("text-anchor", "middle")
-                .attr("dy", -10)
+                .attr("dy", -15)
                 .attr("fill", "#fff")
                 .attr("pointer-events", "none");
 
-            // Simple text wrapping algorithm
+            // Improved text wrapping algorithm that handles long words without spaces
             let words = label.split(/\s+/);
             let line = "";
             let lineNumber = 0;
             const lineHeight = 20;
+            const maxCharPerLine = Math.floor(nodeWidth / 7); // Approx. character width
 
             for (let i = 0; i < words.length; i++) {
-                let testLine = line + words[i] + " ";
-                if (testLine.length * 7 > nodeWidth) { // Approximate character width
-                    // Add a new line
-                    text.append("tspan")
-                        .attr("x", 0)
-                        .attr("y", 0)
-                        .attr("dy", lineNumber * lineHeight)
-                        .text(line);
-                    line = words[i] + " ";
-                    lineNumber++;
+                let word = words[i];
+
+                // Handle very long words by splitting them
+                if (word.length > maxCharPerLine) {
+                    // If line is not empty, add it first
+                    if (line) {
+                        text.append("tspan")
+                            .attr("x", 0)
+                            .attr("y", 0)
+                            .attr("dy", lineNumber * lineHeight)
+                            .text(line);
+                        lineNumber++;
+                        line = "";
+                    }
+
+                    // Split long word into chunks
+                    while (word.length > 0) {
+                        const chunk = word.substring(0, maxCharPerLine - 1);
+                        word = word.substring(maxCharPerLine - 1);
+
+                        // Add hyphen if not at the end
+                        const displayChunk = word.length > 0 ? chunk + "-" : chunk;
+
+                        text.append("tspan")
+                            .attr("x", 0)
+                            .attr("y", 0)
+                            .attr("dy", lineNumber * lineHeight)
+                            .text(displayChunk);
+                        lineNumber++;
+                    }
                 } else {
-                    line = testLine;
+                    // Normal word processing
+                    let testLine = line + (line ? " " : "") + word;
+                    if (testLine.length * 7 > nodeWidth) {
+                        // Add the current line
+                        text.append("tspan")
+                            .attr("x", 0)
+                            .attr("y", 0)
+                            .attr("dy", lineNumber * lineHeight)
+                            .text(line);
+                        line = word;
+                        lineNumber++;
+                    } else {
+                        line = testLine;
+                    }
                 }
             }
 
-            // Add the last line
-            text.append("tspan")
-                .attr("x", 0)
-                .attr("y", 0)
-                .attr("dy", lineNumber * lineHeight)
-                .text(line);
+            // Add the last line if not empty
+            if (line) {
+                text.append("tspan")
+                    .attr("x", 0)
+                    .attr("y", 0)
+                    .attr("dy", lineNumber * lineHeight)
+                    .text(line);
+            }
         });
 
         // Add tooltip events with improved responsiveness
@@ -316,6 +412,9 @@ function initializeVisualization() {
             return;
         }
 
+        // Clear selected edge if any
+        app.state.selectedEdge = null;
+
         // Update selected node
         app.state.selectedNode = d.id;
 
@@ -324,7 +423,33 @@ function initializeVisualization() {
         app.elements.nodeDetailsTitle.textContent = d.name || d.id || "Node Details";
 
         // Format node details using the utility function
-        app.elements.nodeDetailsContent.innerHTML = formatNodeDetails(d);
+        app.elements.nodeDetailsContent.innerHTML = window.SchGraphApp.utils.formatNodeDetails(d);
+    }
+
+    // Handle edge click to show details
+    function edgeClicked(event, d) {
+        // Prevent event bubbling
+        event.stopPropagation();
+
+        // Deselect current edge if it's the same one
+        if (app.state.selectedEdge === d) {
+            app.state.selectedEdge = null;
+            app.elements.nodeDetails.classList.add('d-none');
+            return;
+        }
+
+        // Clear selected node if any
+        app.state.selectedNode = null;
+
+        // Update selected edge
+        app.state.selectedEdge = d;
+
+        // Show the details panel
+        app.elements.nodeDetails.classList.remove('d-none');
+        app.elements.nodeDetailsTitle.textContent = d.name || "Edge Details";
+
+        // Format edge details using the utility function
+        app.elements.nodeDetailsContent.innerHTML = window.SchGraphApp.utils.formatEdgeDetails(d);
     }
 
     // Drag functions for nodes
@@ -387,10 +512,36 @@ function initializeVisualization() {
         }
     }
 
+    function updateForces(forces) {
+    if (!simulation) return;
+
+    // Update charge force
+    if (forces.charge !== undefined) {
+        simulation.force("charge")
+            .strength(forces.charge);
+    }
+
+    // Update link distance
+    if (forces.linkDistance !== undefined) {
+        simulation.force("link")
+            .distance(forces.linkDistance);
+    }
+
+    // Update collision strength
+    if (forces.collisionStrength !== undefined) {
+        simulation.force("collide")
+            .strength(forces.collisionStrength);
+    }
+
+    // Use a smaller alpha for smoother transitions during slider changes
+    simulation.alpha(0.1).restart();
+}
+
     // Return public API
     return {
         updateGraph,
         resetZoom,
-        togglePhysics
+        togglePhysics,
+        updateForces
     };
 }

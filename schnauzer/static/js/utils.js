@@ -1,16 +1,5 @@
 // utils.js - Utility functions for the graph visualization
 
-/**
- * Truncates text to a specified length and adds ellipsis if needed
- * @param {string} text - The text to truncate
- * @param {number} maxLength - Maximum length before truncation
- * @returns {string} Truncated text with ellipsis if needed
- */
-function truncateText(text, maxLength = 150) {
-    if (!text) return '';
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + '...';
-}
 
 /**
  * Format node data for display in details panel
@@ -36,7 +25,7 @@ function formatNodeDetails(node) {
 
     // Get the current graph data
     const graph = window.SchGraphApp.state.currentGraph;
-    if (!graph || !graph.links) return html;
+    if (!graph || !graph.edges) return html;
 
     // Find parents and children from links
     const parents = [];
@@ -44,20 +33,20 @@ function formatNodeDetails(node) {
 
     // Process all links to find relationships
     graph.edges.forEach(link => {
-        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+        const sourceId = typeof link.source === 'object' ? link.source.name : link.source;
+        const targetId = typeof link.target === 'object' ? link.target.name : link.target;
 
         // If this node is the target, the source is a parent
-        if (targetId === node.id) {
-            const parentNode = graph.nodes.find(n => n.id === sourceId);
+        if (targetId === node.name) {
+            const parentNode = graph.nodes.find(n => n.name === sourceId);
             if (parentNode) {
                 parents.push(parentNode);
             }
         }
 
         // If this node is the source, the target is a child
-        if (sourceId === node.id) {
-            const childNode = graph.nodes.find(n => n.id === targetId);
+        if (sourceId === node.name) {
+            const childNode = graph.nodes.find(n => n.name === targetId);
             if (childNode) {
                 children.push(childNode);
             }
@@ -71,7 +60,7 @@ function formatNodeDetails(node) {
         // Show parents
         html += `<p><strong>Parents:</strong> `;
         if (parents.length > 0) {
-            const parentNames = parents.map(p => p.name || p.id).join(', ');
+            const parentNames = parents.map(p => p.name).join(', ');
             html += parentNames;
         } else {
             html += 'None';
@@ -81,7 +70,7 @@ function formatNodeDetails(node) {
         // Show children
         html += `<p><strong>Children:</strong> `;
         if (children.length > 0) {
-            const childrenNames = children.map(c => c.name || c.id).join(', ');
+            const childrenNames = children.map(c => c.name).join(', ');
             html += childrenNames;
         } else {
             html += 'None';
@@ -100,114 +89,46 @@ function formatNodeDetails(node) {
 
     return html;
 }
-// Helper functions
 
-function isComplexValue(value) {
-    return (typeof value === 'object' && value !== null) ||
-           (typeof value === 'string' && value.length > 100);
-}
 
-function formatValue(value) {
-    if (value === null || value === undefined) {
-        return '<em>None</em>';
-    } else if (typeof value === 'boolean') {
-        return value ? 'True' : 'False';
-    } else if (typeof value === 'number') {
-        // Format address-like numbers as hex
-        if (value > 1000000) {
-            return '0x' + value.toString(16);
+function formatEdgeDetails(edge) {
+    if (!edge) return '';
+
+    let html = '';
+
+    // Show edge name at the top if available
+    if (edge.name) {
+        html += `<p><strong>Name:</strong> ${edge.name}</p>`;
+    }
+
+    // Show source and target
+    const sourceNode = typeof edge.source === 'object' ? edge.source :
+        (window.SchGraphApp.state.currentGraph?.nodes.find(n => n.name === edge.source) || {name: edge.source});
+    const targetNode = typeof edge.target === 'object' ? edge.target :
+        (window.SchGraphApp.state.currentGraph?.nodes.find(n => n.name === edge.target) || {name: edge.target});
+
+    html += `<p><strong>From:</strong> ${sourceNode.name}</p>`;
+    html += `<p><strong>To:</strong> ${targetNode.name}</p>`;
+
+    // Show all labels from the dictionary
+    if (edge.labels && Object.keys(edge.labels).length > 0) {
+        html += `<h6>Labels</h6>`;
+
+        for (const [key, value] of Object.entries(edge.labels)) {
+            html += `<p><strong>${key}:</strong> ${value}</p>`;
         }
-        return value.toString();
-    } else {
-        // Basic string escaping
-        return String(value)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-    }
-}
-
-function formatComplexValue(value) {
-    if (typeof value === 'object' && value !== null) {
-        try {
-            // Pretty print JSON with syntax highlighting
-            const json = JSON.stringify(value, null, 2);
-
-            // Simple syntax highlighting
-            return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-                let cls = 'text-primary'; // string
-                if (/^"/.test(match)) {
-                    if (/:$/.test(match)) {
-                        cls = 'text-dark'; // key
-                    }
-                } else if (/true|false/.test(match)) {
-                    cls = 'text-success'; // boolean
-                } else if (/null/.test(match)) {
-                    cls = 'text-danger'; // null
-                } else {
-                    cls = 'text-info'; // number
-                }
-                return '<span class="' + cls + '">' + match + '</span>';
-            }).replace(/\n/g, '<br>').replace(/\s{2}/g, '&nbsp;&nbsp;');
-        } catch (e) {
-            // Fallback for objects that can't be stringified
-            return `<span class="text-danger">Complex object: ${e.message}</span>`;
-        }
-    } else if (typeof value === 'string') {
-        // For long strings
-        return value
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/\n/g, '<br>');
-    } else {
-        return formatValue(value);
-    }
-}
-
-/**
- * Generate a color based on a string (consistent hashing)
- * @param {string} str - Input string to generate color from
- * @returns {string} Hex color code
- */
-function stringToColor(str) {
-    if (!str) return '#9467bd'; // Default color
-
-    // Simple hash function
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-        hash = str.charCodeAt(i) + ((hash << 5) - hash);
     }
 
-    // Convert to hex color
-    let color = '#';
-    for (let i = 0; i < 3; i++) {
-        const value = (hash >> (i * 8)) & 0xFF;
-        color += ('00' + value.toString(16)).substr(-2);
+    // Add description if available
+    if (edge.description) {
+        html += `
+            <hr>
+            <h6>Description</h6>
+            <div class="node-description">${edge.description.replace(/\n/g, '<br>')}</div>
+        `;
     }
 
-    return color;
-}
-
-/**
- * Calculate contrast color (black or white) based on background color
- * @param {string} hexColor - Hex color code
- * @returns {string} '#ffffff' or '#000000' depending on contrast
- */
-function getContrastColor(hexColor) {
-    // Default to black if invalid color
-    if (!hexColor || hexColor.length < 7) return '#000000';
-
-    // Convert hex to RGB
-    const r = parseInt(hexColor.substr(1, 2), 16);
-    const g = parseInt(hexColor.substr(3, 2), 16);
-    const b = parseInt(hexColor.substr(5, 2), 16);
-
-    // Calculate relative luminance
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-    // Return black for light colors, white for dark colors
-    return luminance > 0.5 ? '#000000' : '#ffffff';
+    return html;
 }
 
 function exportGraphAsPNG() {
@@ -291,7 +212,7 @@ function exportGraphAsPNG() {
         }, 100);
     };
 
-    // Set crossorigin to anonymous to avoid tainted canvas issues
+    // Set cross-origin = anonymous to avoid tainted canvas issues
     img.crossOrigin = 'Anonymous';
     img.src = url;
 
@@ -302,25 +223,11 @@ function exportGraphAsPNG() {
     };
 }
 
-
-/**
- * Get URL parameters as an object
- * @returns {Object} Parameter key-value pairs
- */
-function getUrlParams() {
-    const params = {};
-    const searchParams = new URLSearchParams(window.location.search);
-
-    for (const [key, value] of searchParams.entries()) {
-        params[key] = value;
-    }
-
-    return params;
-}
-
 // Make sure the function is attached to the app namespace
 document.addEventListener('DOMContentLoaded', function() {
     window.SchGraphApp = window.SchGraphApp || {};
     window.SchGraphApp.utils = window.SchGraphApp.utils || {};
+    window.SchGraphApp.utils.formatNodeDetails = formatNodeDetails;
+    window.SchGraphApp.utils.formatEdgeDetails = formatEdgeDetails;
     window.SchGraphApp.utils.exportGraphAsPNG = exportGraphAsPNG;
 });

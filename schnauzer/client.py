@@ -1,25 +1,42 @@
-"""Client module for connecting to the visualization server using ZeroMQ."""
+"""Client module for connecting to the visualization server using ZeroMQ.
+
+This module provides a client interface to send NetworkX graph data to the
+Schnauzer visualization server for interactive rendering.
+"""
 import zmq
 import json
 import atexit
 import networkx
 
 class VisualizationClient:
-    """Client for sending graph data to the visualization server."""
+    """Client for sending graph data to the visualization server.
+
+    This class handles the connection to a running Schnauzer visualization server
+    and provides methods to convert and send NetworkX graph data for display.
+    """
 
     def __init__(self, host='localhost', port=8086):
-        """Initialize the visualization client."""
+        """Initialize the visualization client.
+
+        Args:
+            host (str): Hostname or IP address of the visualization server
+            port (int): Port number the server is listening on
+        """
         self.host = host
         self.port = port
         self.context = zmq.Context()
         self.socket = None
         self.connected = False
 
-        # Register cleanup on exit
+        # Ensure proper cleanup on program exit
         atexit.register(self.disconnect)
 
-    def connect(self):
-        """Establish a non-blocking connection to the visualization server."""
+    def _connect(self):
+        """Establish a non-blocking connection to the visualization server.
+
+        Returns:
+            bool: True if connection was successful, False otherwise
+        """
         # Already connected? Just return
         if self.connected:
             return True
@@ -59,16 +76,23 @@ class VisualizationClient:
                    node_labels: list[str] = None,
                    edge_labels: list[str] = None,
                    type_color_map: dict[str, str]=None):
-        """
-        Send networkx graph data to the visualization server.
+        """Send networkx graph data to the visualization server.
+
+        This method converts a NetworkX graph to a JSON format suitable for
+        visualization and sends it to the connected server.
 
         Args:
-            graph: A networkx graph object
-            title: Optional title for the visualization
-        """
+            graph (networkx.Graph): A NetworkX graph object to visualize
+            title (str, optional): Title for the visualization
+            node_labels (list[str], optional): List of node attributes to display in visualization
+            edge_labels (list[str], optional): List of edge attributes to display in visualization
+            type_color_map (dict[str, str], optional): Mapping of node/edge types to colors (hex format)
 
+        Returns:
+            bool: True if successfully sent, False otherwise
+        """
         if not self.connected:
-            success = self.connect()
+            success = self._connect()
             if not success:
                 return False
 
@@ -102,7 +126,7 @@ class VisualizationClient:
                 self.socket.close()
             self.socket = None
             # Try to reconnect once
-            return self.connect() and self.send_graph(graph, title)
+            return self._connect() and self.send_graph(graph, title)
         except Exception as e:
             print(f"Unexpected error sending graph data: {e}")
             self.connected = False
@@ -111,15 +135,21 @@ class VisualizationClient:
             self.socket = None
             return False
 
-    # Modification for client.py _convert_graph_to_json method
     @staticmethod
     def _convert_graph_to_json(graph: networkx.Graph,
                                node_labels: list[str] = None,
                                edge_labels: list[str] = None,
                                type_color_map: dict[str, str] = None):
-        """
-        Convert a networkx graph to a JSON-serializable format.
-        Pass a label list if you want only specific labels to be visualized.
+        """Convert a NetworkX graph to a JSON-serializable format.
+
+        Args:
+            graph (networkx.Graph): The graph to convert
+            node_labels (list[str], optional): List of node attributes to include
+            edge_labels (list[str], optional): List of edge attributes to include
+            type_color_map (dict[str, str], optional): Mapping of node/edge types to colors
+
+        Returns:
+            dict: JSON-serializable structure representing the graph
         """
         # Basic structure
         json_data = {
@@ -129,14 +159,15 @@ class VisualizationClient:
 
         # Helper function to make values JSON serializable
         def make_serializable(any_value):
+            """Convert any Python value to a JSON-serializable format."""
             if not any_value:
                 return "None"
 
-            # return atomic values
+            # Return atomic values
             if isinstance(any_value, (str, int, float, bool)):
                 return any_value
 
-            # handle structured data
+            # Handle structured data
             elif hasattr(any_value, 'to_dict') and callable(any_value.to_dict):
                 result = {}
                 for k, v in any_value.to_dict():
@@ -154,22 +185,22 @@ class VisualizationClient:
             # Default fallback
             return str(any_value)
 
-        node_map = {} # track relationships
+        # Track relationships between nodes for parent/child references
+        node_map = {}
 
-        # add nodes
+        # Process nodes
         for node, data in graph.nodes(data=True):
             labels = {}
             for key, value in data.items():
                 if key in ['name', 'type']:
-                    continue # store them separately
-                if node_labels and key in node_labels: # add selection
+                    continue  # Store these separately
+                if node_labels and key in node_labels:  # Add selected labels only
                     labels[key] = make_serializable(value)
-                else: # add all
+                else:  # Add all labels
                     labels[key] = make_serializable(value)
-
 
             node_data = {
-                'name': data.get('name', data.get('label', str(node))), # Try to find a name or label
+                'name': data.get('name', data.get('label', str(node))),  # Try to find a name or label
                 'type': data.get('type', 'not set'),
                 'labels': labels,
                 'parents': [],
@@ -178,7 +209,7 @@ class VisualizationClient:
             node_map[str(node)] = node_data
             json_data['nodes'].append(node_data)
 
-        # Add edges:
+        # Process edges
         for source, target, data in graph.edges(data=True):
             source_id = str(source)
             target_id = str(target)
@@ -200,13 +231,14 @@ class VisualizationClient:
                     'name': source_node['name']
                 })
 
+            # Process edge labels
             labels = {}
             for key, value in data.items():
                 if key in ['name', 'type']:
-                    continue # store them separately
-                if edge_labels and key in edge_labels: # add selection
+                    continue  # Store these separately
+                if edge_labels and key in edge_labels:  # Add selected labels only
                     labels[key] = make_serializable(value)
-                else: # add all
+                else:  # Add all labels
                     labels[key] = make_serializable(value)
 
             link_data = {
@@ -219,29 +251,31 @@ class VisualizationClient:
 
             json_data['edges'].append(link_data)
 
+        # Apply custom color mapping if provided
         if type_color_map:
             for node_data in json_data['nodes']:
                 node_type = node_data.get('type')
                 if node_type:
-                    node_data['color'] = type_color_map.get(node_type, '#a3a3a3') # Light gray
+                    node_data['color'] = type_color_map.get(node_type, '#a3a3a3')  # Light gray default
             for edge_data in json_data['edges']:
                 edge_type = edge_data.get('type')
                 if edge_type:
-                    edge_data['color'] = type_color_map.get(edge_type, '#a3a3a3') # light gray
+                    edge_data['color'] = type_color_map.get(edge_type, '#a3a3a3')  # Light gray default
 
-        else:# Determine node types based on connections
+        else:
+            # Determine node types based on connections
             for node_data in json_data['nodes']:
                 if not node_data['parents'] and node_data['children']:
                     node_data['type'] = 'root'
-                    node_data['color'] = '#FF0000' # Red
+                    node_data['color'] = '#FF0000'  # Red for root nodes
                 elif node_data['parents'] and not node_data['children']:
                     node_data['type'] = 'leaf'
-                    node_data['color'] = '#00FF00' # Green
+                    node_data['color'] = '#00FF00'  # Green for leaf nodes
                 else:
                     node_data['type'] = 'normal'
-                    node_data['color'] = '#0000FF' # Blue
+                    node_data['color'] = '#0000FF'  # Blue for regular nodes
             for edge in json_data['edges']:
                 edge['type'] = 'normal'
-                edge['color'] = "#a3a3a3" # light gray
+                edge['color'] = "#a3a3a3"  # Light gray for edges
 
         return json_data

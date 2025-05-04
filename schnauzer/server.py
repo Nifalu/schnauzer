@@ -1,4 +1,9 @@
-"""Schnauzer visualization web server module."""
+"""Schnauzer visualization web server module.
+
+This module provides both a ZeroMQ backend for receiving NetworkX graph data
+and a web frontend for interactive visualization. The server renders network graphs
+using D3.js and provides interactive features like zooming, panning, and node details.
+"""
 from flask import Flask, render_template, jsonify, session
 from flask_socketio import SocketIO, emit
 import argparse
@@ -16,7 +21,9 @@ class Server:
     Combined web and visualization server for NetworkX graphs.
 
     This class handles both the ZeroMQ backend for receiving graph data
-    and the web frontend for visualization.
+    and the web frontend for visualization. It creates two servers:
+    1. A ZeroMQ server to receive graph data from clients
+    2. A Flask web server to serve the interactive visualization
     """
 
     def __init__(self, web_port=8080, backend_port=8086):
@@ -42,8 +49,8 @@ class Server:
         self.socketio = SocketIO(
             self.app,
             cors_allowed_origins="*",
-            ping_timeout=60,         # Longer ping timeout
-            ping_interval=25,        # More frequent pings
+            ping_timeout=60,         # Longer ping timeout for stability
+            ping_interval=25,        # More frequent pings to maintain connection
             async_mode='threading'   # Thread mode for better stability
         )
 
@@ -52,7 +59,14 @@ class Server:
         self._setup_socketio_handlers()
 
     def _create_app(self):
-        """Create and configure the Flask application."""
+        """Create and configure the Flask application.
+
+        Returns:
+            Flask: Configured Flask application
+
+        Raises:
+            SystemExit: If static and template files cannot be located
+        """
         # Determine the location of static and template files
         try:
             # For development (works with the project structure)
@@ -78,19 +92,20 @@ class Server:
                     static_folder=static_folder,
                     template_folder=template_folder)
 
-        app.config['SECRET_KEY'] = str(uuid.uuid4())  # Generate a new secret key on each restart
+        # Generate unique secret key for session security
+        app.config['SECRET_KEY'] = str(uuid.uuid4())
         app.config['SESSION_TYPE'] = 'filesystem'
 
         return app
 
     def _setup_routes(self):
-        """Set up Flask routes."""
+        """Set up Flask routes for the web interface."""
         @self.app.route('/')
         def index():
             # Generate a unique session ID for each client
             if 'client_id' not in session:
                 session['client_id'] = str(uuid.uuid4())
-            return render_template('index.html', title=self.current_graph.get('title', 'NetworkX DiGraph Visualization'))
+            return render_template('index.html', title=self.current_graph.get('title', 'Schnauzer Graph Visualization'))
 
         @self.app.route('/graph-data')
         def get_graph_data():
@@ -98,7 +113,7 @@ class Server:
             return jsonify(self.current_graph)
 
     def _setup_socketio_handlers(self):
-        """Set up SocketIO event handlers."""
+        """Set up SocketIO event handlers for real-time updates."""
         @self.socketio.on('connect')
         def handle_connect():
             print('Web client connected')
@@ -116,12 +131,16 @@ class Server:
             emit('graph_update', self.current_graph)
 
     def _on_graph_update(self):
-        """Callback for when the graph is updated from a backend."""
+        """Callback for when the graph is updated from a backend client."""
         self.socketio.emit('graph_update', self.current_graph)
         print("Broadcasted updated graph to web clients")
 
     def start(self):
-        """Start both the backend and web servers."""
+        """Start both the backend and web servers.
+
+        This method starts the ZeroMQ backend server in a separate thread
+        and then starts the Flask web server in the main thread.
+        """
         if self.running:
             return
 
@@ -149,7 +168,11 @@ class Server:
         )
 
     def _run_backend_server(self):
-        """Run the backend ZeroMQ server in a background thread."""
+        """Run the backend ZeroMQ server in a background thread.
+
+        This method listens for incoming graph data on the ZeroMQ socket
+        and updates the graph when new data is received.
+        """
         # Create a ZeroMQ REP socket
         self.socket = self.context.socket(zmq.REP)
         self.socket.bind(f"tcp://*:{self.backend_port}")
@@ -158,7 +181,7 @@ class Server:
 
         while self.running:
             try:
-                # Wait for next request from client
+                # Wait for next request from client (non-blocking when running)
                 message = self.socket.recv_string(flags=zmq.NOBLOCK if self.running else 0)
 
                 # Simple handshake for connection testing
@@ -208,7 +231,10 @@ class Server:
         print("Backend listener stopped")
 
     def stop(self):
-        """Stop both the backend and web servers."""
+        """Stop both the backend and web servers.
+
+        This method safely stops the ZeroMQ server thread and cleans up resources.
+        """
         self.running = False
         time.sleep(0.2)  # Give the thread time to exit gracefully
 
@@ -221,7 +247,13 @@ class Server:
             self.context = None
 
 def main():
-    """Parse command line arguments and start the server."""
+    """Parse command line arguments and start the server.
+
+    This function is the entry point when running the server directly.
+
+    Returns:
+        Server: The created server instance
+    """
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='NetworkX Graph Visualization Server')
     parser.add_argument('--port', type=int, default=8080,

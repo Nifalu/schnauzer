@@ -4,16 +4,17 @@ Schnauzer is a Python library that visualizes NetworkX graphs in a web browser w
 
 ### Running the Server
 
-From command line:
+From command line: Make sure that the currently active Python environment has the schnauzer package installed. Optionally set --port <port> --backend-port <port>.
 ```bash
-schnauzer-server --port 8080 --backend-port 8086
+pip install schnauzer
+schnauzer-server 
 ```
 
 Or from Python:
 ```python
 from schnauzer import Server
-
-server = Server(web_port=8080, backend_port=8086)
+server = Server()
+# server = Server(web_port=8080, backend_port=8086) # optional
 server.start()
 ```
 

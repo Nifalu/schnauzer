@@ -1,8 +1,11 @@
 from setuptools import setup, find_packages
 
+with open("README.md") as f:
+    description = f.read()
+
 setup(
     name="schnauzer",
-    version="0.1.0",
+    version="0.1.1",
     description="Visualize networkx graphs interactively in a web browser.",
     author="Nico Bachmann",
     author_email="python@deschnauz.ch",
@@ -24,4 +27,6 @@ setup(
         ],
     },
     python_requires=">=3.10",
+    long_description=description,
+    long_description_content_type="text/markdown",
 )

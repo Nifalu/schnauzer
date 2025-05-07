@@ -102,13 +102,180 @@ The visualization server will color the nodes and edges according to their assig
 #### Labels:
 You add arbitrary attributes to nodes and edges of your Graph. All attributes are displayed by default. There are some special names though:
 - Add a `name` Attribute to assign your nodes and edges a name. **You want `name` to be unique!**
+  - _IMPORTANT_: when putting a name attribute the node has from then on be referenced by that name. Working on this issue.
+
 - Add a `type` Attribute to assign your nodes and edges a type. This is used to color the nodes and edges.
 - Add a `description` Attribute to assign your nodes and edges a description that will be displayed on a little tooltip when you hover over nodes and edges. I'd recommend to keep this short though.
 
 #### Filtering Labels:
 If some other library creates the graph you want to visualize, you might have more attributes than you are interested in. Resulting in a bloated UI with too much information. Use the optional `node_labels` and `edge_labels` lists to filter for attributes that are displayed in the UI.
 
+### Examples:
 
-### Full example
+Note: The examples assume the Visualization Server is already running in a separate Process. Find all examples also in `examples/`
+
+```Python
+import networkx as nx
+from schnauzer import VisualizationClient
+
+G = nx.DiGraph()
+
+nodes = [ 'A', 'B', 'C', 'D', 'E']
+edges = [ ('A', 'B'), ('A', 'C'), ('B', 'D'), ('C', 'D'), ('D', 'E') ]
+
+G.add_nodes_from(nodes)
+G.add_edges_from(edges)
+
+viz_client = VisualizationClient()
+viz_client.send_graph(G, 'Simple Graph')
 ```
+
+![simple](img/simple.png)
+
+```python
+import networkx as nx
+from schnauzer import VisualizationClient
+
+G = nx.DiGraph()
+
+nodes = [
+    ('Entry', {'description': 'Here the program starts'}),
+    ('Condition', {'description': 'Take red if you are brave'}),
+    ('If Block', {'description': 'good choice'}),
+    ('Red Pill', {'description': 'very nice'}),
+    ('Else Block', {'description': 'bad choice'}),
+    ('Blue Pill', {'description': 'not cool'}),
+    ('Exit', {'description': 'Goodbye'})
+]
+
+edges = [
+    ('Entry', 'Condition', {'description': 'Edges can also have attributes'}),
+    ('Condition', 'If Block', {'description': 'Add any attribute you want'}),
+    ('Condition', 'Else Block', {'description': 'Some attributes'}),
+    ('If Block', 'Red Pill', {'description': 'They will all appear in the details panel'}),
+    ('Else Block', 'Blue Pill', {'description': "like 'description', 'name' or 'type'"}),
+    ('Red Pill', 'Exit', {'description': 'but are hidden in the graph for clarity'}),
+    ('Blue Pill', 'Exit', {'description': 'have special rendering'}),
+]
+
+G.add_nodes_from(nodes)
+G.add_edges_from(edges)
+
+viz_client = VisualizationClient()
+viz_client.send_graph(G, 'Graph with Custom Attributes')
 ```
+
+![simple](img/attributes.png)
+
+```python
+import networkx as nx
+from schnauzer import VisualizationClient
+
+G = nx.DiGraph()
+
+type_color_map = {
+    'standard': '#FFD700',
+    'Blue Path': '#0000FF',
+    'Red Path': '#FF0000',
+}
+
+nodes = [
+    ('Entry', {
+        'description': 'Here the program starts',
+        'type': 'standard'
+    }),
+    ('Condition', {
+        'description': 'Take red if you are brave',
+        'type': 'standard'
+    }),
+    ('If Block', {
+        'description': 'good choice',
+        'type': 'Red Path'
+    }),
+    ('Red Pill', {
+        'description': 'very nice',
+        'type': 'Red Path'
+    }),
+    ('Else Block', {
+        'description': 'bad choice',
+        'type': 'Blue Path'
+    }),
+    ('Blue Pill', {
+        'description': 'not cool',
+        'type': 'Blue Path'
+    }),
+    ('Exit', {
+        'description': 'Goodbye',
+        'type': 'standard'
+    })
+]
+
+edges = [
+    ('Entry', 'Condition', {
+        'description': 'Edges can also have attributes'
+    }),
+    ('Condition', 'If Block', {
+        'description': 'Add any attribute you want',
+        'type': 'Red Path'
+    }),
+    ('Condition', 'Else Block', {
+        'description': 'Some attributes',
+        'type': 'Blue Path'
+    }),
+    ('If Block', 'Red Pill', {
+        'description': 'They will all appear in the details panel',
+        'type': 'Red Path'
+    }),
+    ('Else Block', 'Blue Pill', {
+        'description': "like 'description', 'name' or 'type'",
+        'type': 'Blue Path'
+    }),
+    ('Red Pill', 'Exit', {
+        'description': 'but are hidden in the graph for clarity',
+        'type': 'Red Path'
+    }),
+    ('Blue Pill', 'Exit', {
+        'description': 'have special rendering',
+        'type': 'Blue Path'
+    }),
+]
+
+G.add_nodes_from(nodes)
+G.add_edges_from(edges)
+
+viz_client = VisualizationClient()
+viz_client.send_graph(G, 'Custom Coloring!', type_color_map=type_color_map)
+```
+
+![simple](img/colors.png)
+
+```python
+import networkx as nx
+from schnauzer import VisualizationClient
+from time import sleep
+
+G = nx.DiGraph()
+
+nodes = [ 'A', 'B', 'C', 'D', 'E']
+edges = [ ('A', 'B'), ('A', 'C'), ('B', 'D'), ('C', 'D'), ('D', 'E') ]
+
+viz_client = VisualizationClient()
+
+for node in nodes:
+    G.add_node(node),
+    for u, v in edges:
+        G.add_edge(u, v) if node == v else None
+
+    viz_client.send_graph(G, 'Live Updates')
+    sleep(2) # Simulate some delay in adding nodes and edges
+
+
+
+
+
+
+
+
+```
+
+![simple](img/live-updates.gif)

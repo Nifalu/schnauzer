@@ -58,7 +58,11 @@
 }
 
 .link {
-    stroke-opacity: 0.8;
+    fill: none !important;  /* Force no fill */
+}
+
+path.link {
+    fill: none !important;  /* Extra specific */
 }
 
 .graph-tooltip {

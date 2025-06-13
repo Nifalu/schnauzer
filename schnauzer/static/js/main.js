@@ -93,9 +93,12 @@ document.addEventListener('DOMContentLoaded', function() {
             app.viz.togglePhysics(app.state.physicsEnabled);
         });
 
-        // Request update button
-        app.elements.requestUpdateBtn.addEventListener('click', function() {
-            loadGraphData();
+        // Toggle Tree view
+        document.getElementById('toggle-layout').addEventListener('click', function() {
+            const isTree = app.viz.toggleTreeLayout();
+            this.textContent = isTree ? 'Force Layout' : 'Tree Layout';
+            this.classList.toggle('btn-outline-primary');
+            this.classList.toggle('btn-primary');
         });
 
         // export button

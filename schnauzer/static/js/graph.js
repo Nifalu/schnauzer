@@ -177,6 +177,87 @@ function initializeVisualization() {
         }
     }
 
+    function applyDagreLayout(nodes, edges, width, height) {
+        // Create a new directed graph
+        const g = new dagre.graphlib.Graph({
+            multigraph: true,
+            directed: true,
+            compound: false,
+        });
+
+        // Set graph properties
+        g.setGraph({
+            rankdir: "TB",     // Top to bottom
+            align: "UL",       // Align to upper left
+            nodesep: 50,       // Horizontal space between nodes
+            ranksep: 100,      // Vertical space between ranks
+            marginx: 40,
+            marginy: 40,
+            ranker: "network-simplex",
+            edgesep:25,
+        });
+
+        // Default node settings
+        g.setDefaultNodeLabel(() => ({}));
+
+        // Add nodes with their dimensions
+        nodes.forEach(node => {
+            const dims = getNodeDimensions(node);
+            g.setNode(node.name, {
+                width: dims.width,
+                height: dims.height,
+                label: node.name
+            });
+        });
+
+        // Add edges (dagre will handle cycles automatically)
+        edges.forEach(edge => {
+            // For multigraphs, we need unique edge identifiers
+            const edgeKey = edge.key || "0";
+            g.setEdge(
+                edge.source.name || edge.source,
+                edge.target.name || edge.target,
+                {
+                    label: edge.name,
+                    key: edgeKey
+                },
+                `${edge.source}-${edge.target}-${edgeKey}` // unique name for multigraph support
+            );
+        });
+
+        // Run the layout algorithm
+        dagre.layout(g);
+
+        // Get the graph dimensions
+        const graphInfo = g.graph();
+
+        // Calculate scaling to fit in viewport
+        const scaleX = (width - 100) / graphInfo.width;
+        const scaleY = (height - 100) / graphInfo.height;
+        const scale = Math.min(scaleX, scaleY, 1); // Don't scale up, only down
+
+        // Calculate offset to center the graph
+        const offsetX = (width - graphInfo.width * scale) / 2;
+        const offsetY = (height - graphInfo.height * scale) / 2;
+
+        // Apply the computed positions to nodes
+        nodes.forEach(node => {
+            const dagreNode = g.node(node.name);
+            if (dagreNode) {
+                node.x = dagreNode.x * scale + offsetX;
+                node.y = dagreNode.y * scale + offsetY;
+                // Store dagre positions for force layout reference
+                node.dagreX = node.x;
+                node.dagreY = node.y;
+            }
+        });
+
+        // Dagre has already handled cycles by determining the best rank for each node
+        // Cycle edges will naturally be drawn as longer curves
+    }
+
+    let useTreeLayout = false;
+
     // Render a graph from data
     function updateGraph(graph) {
         // Ensure graph has nodes and links arrays
@@ -193,7 +274,7 @@ function initializeVisualization() {
 
         // Clear existing graph elements
         g.selectAll(".node").remove();
-        g.selectAll(".link").remove();
+        g.selectAll(".link-group").remove();
 
         // Create dynamic markers for different colored edges
         const defs = svg.select("defs");
@@ -202,10 +283,44 @@ function initializeVisualization() {
         // Add default color
         colors.add("#999");
 
-        // Collect all unique edge colors
+        // Build a map for edges between nodes (directed)
+        const edgeGroups = new Map();
         graph.edges.forEach(edge => {
             if (edge.color) {
                 colors.add(edge.color);
+            }
+
+            // Handle both string and object forms
+            const sourceName = typeof edge.source === 'object' ? edge.source.name : edge.source;
+            const targetName = typeof edge.target === 'object' ? edge.target.name : edge.target;
+            const key = `${sourceName}→${targetName}`;
+
+            if (!edgeGroups.has(key)) {
+                edgeGroups.set(key, []);
+            }
+            edgeGroups.get(key).push(edge);
+        });
+
+        // Assign curve offsets for multiple edges between same source→target
+        graph.edges.forEach(edge => {
+            // Handle both string and object forms of source/target
+            const sourceName = typeof edge.source === 'object' ? edge.source.name : edge.source;
+            const targetName = typeof edge.target === 'object' ? edge.target.name : edge.target;
+            const key = `${sourceName}→${targetName}`;
+
+            const edgeGroup = edgeGroups.get(key);
+
+            if (edgeGroup && edgeGroup.length > 1) {
+                // Multiple edges from same source to same target
+                const index = edgeGroup.indexOf(edge);
+                const totalEdges = edgeGroup.length;
+
+                // Space them out with curves
+                const spacing = 50; // pixels between parallel edges
+                edge.curveOffset = (index - (totalEdges - 1) / 2) * spacing;
+            } else {
+                // Single edge - straight line
+                edge.curveOffset = 0;
             }
         });
 
@@ -218,58 +333,86 @@ function initializeVisualization() {
             defs.append("marker")
                 .attr("id", markerId)
                 .attr("viewBox", "-0 -5 10 10")
-                .attr("refX", 0)
+                .attr("refX", 5)  // Position in middle
                 .attr("refY", 0)
                 .attr("orient", "auto")
                 .attr("markerWidth", 6)
                 .attr("markerHeight", 6)
-                .attr("overflow", "visible")
+                .attr("markerUnits", "strokeWidth")
                 .append("svg:path")
                 .attr("d", "M 0,-5 L 10,0 L 0,5")
                 .attr("fill", color)
                 .style("stroke", "none");
         });
 
-        // Set up force simulation
-        simulation = d3.forceSimulation(graph.nodes)
-            .force("link", d3.forceLink(graph.edges)
-                .id(d => d.name)
-                .distance(200)
-                .strength(0.5))
-            .force("charge", d3.forceManyBody()
-                .strength(-1800)
-                .distanceMin(150)
-                .distanceMax(500))
-            .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collide", d3.forceCollide().radius(100).strength(1.0))
-            .force("x", d3.forceX(width / 2).strength(0.07))
-            .force("y", d3.forceY(height / 2).strength(0.07));
+        // Apply dagre layout if in tree mode
+        if (useTreeLayout) {
+            applyDagreLayout(graph.nodes, graph.edges, width, height);
+        }
+
+        // Create simulation with appropriate forces
+        if (useTreeLayout) {
+            // Minimal forces to respect dagre layout
+            simulation = d3.forceSimulation(graph.nodes)
+                .force("link", d3.forceLink(graph.edges)
+                    .id(d => d.name)
+                    .distance(150)
+                    .strength(0.1))
+                .force("charge", d3.forceManyBody()
+                    .strength(-300)
+                    .distanceMin(30))
+                .force("collide", d3.forceCollide()
+                    .radius(d => getNodeDimensions(d).width / 2 + 10))
+                // Strong forces to maintain dagre positions
+                .force("x", d3.forceX(d => d.dagreX || width / 2).strength(0.8))
+                .force("y", d3.forceY(d => d.dagreY || height / 2).strength(0.8))
+                .alpha(0.3); // Start with low alpha
+        } else {
+            // Set up force simulation
+            simulation = d3.forceSimulation(graph.nodes)
+                .force("link", d3.forceLink(graph.edges)
+                    .id(d => d.name)
+                    .distance(200)
+                    .strength(0.5))
+                .force("charge", d3.forceManyBody()
+                    .strength(-1800)
+                    .distanceMin(150)
+                    .distanceMax(500))
+                .force("center", d3.forceCenter(width / 2, height / 2))
+                .force("collide", d3.forceCollide().radius(100).strength(1.0))
+                .force("x", d3.forceX(width / 2).strength(0.07))
+                .force("y", d3.forceY(height / 2).strength(0.07));
+        }
 
         // Create links with wider click/hover areas
-        link = g.selectAll(".link")
+        link = g.selectAll(".link-group")
             .data(graph.edges)
             .enter()
             .append("g")  // Use a group to contain both visible line and invisible click area
             .attr("class", "link-group");
 
         // Add the visible line
-        link.append("line")
+        link.append("path")  // Use path instead of line
             .attr("class", "link")
             .attr("stroke-width", 2)
             .attr("stroke", d => d.color || "#999")
-            .attr("marker-end", function(d) {
+            .attr("fill", "none")  // Important for paths
+            .style("fill", "none")
+            .attr("marker-mid", function(d) {
                 const color = d.color || "#999";
                 const markerId = "arrowhead-" + color.replace('#', '');
                 return "url(#" + markerId + ")";
             });
 
-        // Add invisible wider line for easier interaction (10px wide)
-        link.append("line")
+        link.append("path")
             .attr("class", "link-hitarea")
-            .attr("stroke-width", 10)  // Much wider than the visible line
-            .attr("stroke", "transparent")  // Invisible
-            .attr("stroke-opacity", 0)  // Completely transparent
-            .style("cursor", "pointer");  // Show pointer cursor on hover
+            .attr("stroke-width", 15)
+            .attr("fill", "none")  // IMPORTANT: Also set fill to none for hitarea
+            .attr("stroke", "rgba(0,0,0,0)")  // Use rgba instead of "transparent"
+            .attr("opacity", 0)  // Set entire element opacity to 0
+            .attr("pointer-events", "stroke")  // Still capture mouse events
+            .style("cursor", "pointer");
+
 
         // Add events to the group
         link.on("click", edgeClicked)
@@ -413,51 +556,35 @@ function initializeVisualization() {
 
         simulation.on("tick", () => {
             link.each(function(d) {
-                // Calculate direction vector between source and target
                 const dx = d.target.x - d.source.x;
                 const dy = d.target.y - d.source.y;
-
-                // Get target node dimensions
-                const targetDimensions = getNodeDimensions(d.target);
-                const padding = 12; // Padding before the node boundary
-
-                // Calculate the distance to the rectangle intersection
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                // Using normalized direction for consistent approach
-                const unitDx = dx / distance;
-                const unitDy = dy / distance;
+                let pathData;
 
-                // Find intersection with rectangle using parametric approach
-                let t = Infinity;
-                const halfWidth = targetDimensions.width / 2;
-                const halfHeight = targetDimensions.height / 2;
+                if (d.curveOffset === undefined || d.curveOffset === null || d.curveOffset === 0) {
+                    // Straight line
+                    pathData = `M ${d.source.x},${d.source.y} L ${d.target.x},${d.target.y}`;
+                } else {
+                    // Curved path
+                    const scaleFactor = Math.min(distance / 200, 1);
+                    const actualOffset = d.curveOffset * scaleFactor * 0.5;
 
-                // Check intersection with each edge of the rectangle
-                if (unitDx !== 0) {
-                    // Intersection with vertical edges
-                    const tx1 = (-halfWidth - padding) / unitDx; // Left edge
-                    const tx2 = (halfWidth + padding) / unitDx;  // Right edge
-                    t = Math.min(t, Math.max(tx1, tx2));
+                    const midX = (d.source.x + d.target.x) / 2;
+                    const midY = (d.source.y + d.target.y) / 2;
+
+                    const perpX = -dy / distance * actualOffset;
+                    const perpY = dx / distance * actualOffset;
+
+                    const ctrlX = midX + perpX;
+                    const ctrlY = midY + perpY;
+
+                    pathData = `M ${d.source.x},${d.source.y} Q ${ctrlX},${ctrlY} ${d.target.x},${d.target.y}`;
                 }
 
-                if (unitDy !== 0) {
-                    // Intersection with horizontal edges
-                    const ty1 = (-halfHeight - padding) / unitDy; // Top edge
-                    const ty2 = (halfHeight + padding) / unitDy;  // Bottom edge
-                    t = Math.min(t, Math.max(ty1, ty2));
-                }
-
-                // Calculate target point
-                const targetX = d.target.x - t * unitDx;
-                const targetY = d.target.y - t * unitDy;
-
-                // Set the coordinates for both the visible line and hit area
-                d3.select(this).selectAll("line")
-                    .attr("x1", d.source.x)
-                    .attr("y1", d.source.y)
-                    .attr("x2", targetX)
-                    .attr("y2", targetY);
+                // Update paths
+                d3.select(this).select(".link").attr("d", pathData);
+                d3.select(this).select(".link-hitarea").attr("d", pathData);
             });
 
             node.attr("transform", d => `translate(${d.x},${d.y})`);
@@ -613,6 +740,13 @@ function initializeVisualization() {
         updateGraph,
         resetZoom,
         togglePhysics,
-        updateForces
+        updateForces,
+        toggleTreeLayout: function() {
+        useTreeLayout = !useTreeLayout;
+        if (app.state.currentGraph) {
+            updateGraph(app.state.currentGraph);
+        }
+        return useTreeLayout;
+    }
     };
 }

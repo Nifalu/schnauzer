@@ -3,6 +3,8 @@
 This module provides a client interface to send NetworkX graph data to the
 Schnauzer visualization server for interactive rendering.
 """
+import \
+    networkx as nx
 import zmq
 import json
 import atexit
@@ -210,7 +212,14 @@ class VisualizationClient:
             json_data['nodes'].append(node_data)
 
         # Process edges
-        for source, target, data in graph.edges(data=True):
+        is_multigraph = isinstance(graph, (nx.MultiGraph, nx.MultiDiGraph))
+
+        if is_multigraph:
+            edge_iterator = graph.edges(data=True, keys=True)
+        else:
+            edge_iterator = ((u, v, 0, d) for u, v, d in graph.edges(data=True))
+
+        for source, target, edge_key, data in edge_iterator:
             source_id = str(source)
             target_id = str(target)
 
@@ -233,13 +242,13 @@ class VisualizationClient:
 
             # Process edge labels
             labels = {}
-            for key, value in data.items():
-                if key in ['name', 'type']:
+            for attr_key, value in data.items():
+                if attr_key in ['name', 'type']:
                     continue  # Store these separately
-                if edge_labels and key in edge_labels:  # Add selected labels only
-                    labels[key] = make_serializable(value)
+                if edge_labels and attr_key in edge_labels:  # Add selected labels only
+                    labels[attr_key] = make_serializable(value)
                 else:  # Add all labels
-                    labels[key] = make_serializable(value)
+                    labels[attr_key] = make_serializable(value)
 
             link_data = {
                 'name': data.get('name', data.get('label')),

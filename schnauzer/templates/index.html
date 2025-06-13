@@ -31,13 +31,11 @@
                                 <!-- Layout dropdown -->
                                 <div class="dropdown d-inline-block">
                                     <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" id="layoutDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="bi bi-diagram-3"></i> Layout: <span id="current-layout">CoSE</span>
+                                        <i class="bi bi-diagram-3"></i> Layout: <span id="current-layout">fCose</span>
                                     </button>
                                     <ul class="dropdown-menu" aria-labelledby="layoutDropdown">
-                                        <li><h6 class="dropdown-header">Force-Directed</h6></li>
-                                        <li><a class="dropdown-item layout-option active" href="#" data-layout="cose">CoSE (Spring)</a></li>
-                                        <li><a class="dropdown-item layout-option" href="#" data-layout="fcose">fCoSE (Fast)</a></li>
-                                        <li><a class="dropdown-item layout-option" href="#" data-layout="cola">Cola (Constraint)</a></li>
+                                        <li><h6 class="dropdown-header">Physics</h6></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="fcose">fCose</a></li>
                                         <li><a class="dropdown-item layout-option" href="#" data-layout="euler">Euler (Live Physics)</a></li>
                                         <li><hr class="dropdown-divider"></li>
                                         <li><h6 class="dropdown-header">Hierarchical</h6></li>
@@ -48,7 +46,6 @@
                                         <li><a class="dropdown-item layout-option" href="#" data-layout="circle">Circle</a></li>
                                         <li><a class="dropdown-item layout-option" href="#" data-layout="concentric">Concentric</a></li>
                                         <li><a class="dropdown-item layout-option" href="#" data-layout="grid">Grid</a></li>
-                                        <li><a class="dropdown-item layout-option" href="#" data-layout="random">Random</a></li>
                                     </ul>
                                 </div>
 
@@ -120,16 +117,8 @@
                     </div>
                     <div class="card-body">
                         <div class="mb-3">
-                            <label for="charge-slider" class="form-label">Repulsion Force: <span id="charge-value">-1800</span></label>
-                            <input type="range" class="form-range" id="charge-slider" min="-3000" max="-500" step="100" value="-1800">
-                        </div>
-                        <div class="mb-3">
                             <label for="link-slider" class="form-label">Link Distance: <span id="link-value">200</span></label>
                             <input type="range" class="form-range" id="link-slider" min="50" max="400" step="10" value="200">
-                        </div>
-                        <div class="mb-3">
-                            <label for="collision-slider" class="form-label">Collision Strength: <span id="collision-value">1.0</span></label>
-                            <input type="range" class="form-range" id="collision-slider" min="0.1" max="1.5" step="0.1" value="1.0">
                         </div>
                     </div>
                 </div>
@@ -174,8 +163,6 @@
                 await loadScript('https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js');
 
                 // Load other extensions
-                await loadScript('https://unpkg.com/webcola@3.4.0/WebCola/cola.min.js');
-                await loadScript('https://unpkg.com/cytoscape-cola@2.5.1/cytoscape-cola.js');
                 await loadScript('https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js');
                 await loadScript('https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js');
             } catch (error) {

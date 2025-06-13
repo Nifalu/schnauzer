@@ -65,39 +65,27 @@ function initializeUIControls() {
     setupForceControls();
 
     // Show force controls by default since we start with 'cose' layout
-    updateControlPanelVisibility('cose');
+    updateControlPanelVisibility('fcose');
 
     /**
      * Set up force control sliders
      */
     function setupForceControls() {
-        const chargeSlider = document.getElementById('charge-slider');
         const linkSlider = document.getElementById('link-slider');
-        const collisionSlider = document.getElementById('collision-slider');
-        const chargeValue = document.getElementById('charge-value');
-        const linkValue = document.getElementById('link-value');
-        const collisionValue = document.getElementById('collision-value');
-
-        // Update forces immediately when sliders change
-        if (chargeSlider) {
-            chargeSlider.addEventListener('input', () => {
-                chargeValue.textContent = chargeSlider.value;
-                updateForceParameter('charge', parseInt(chargeSlider.value));
-            });
-        }
 
         if (linkSlider) {
-            linkSlider.addEventListener('input', () => {
-                linkValue.textContent = linkSlider.value;
+            linkSlider.addEventListener('input', debounce(() => {
+                updateSliderValue('link-value', linkSlider.value);
                 updateForceParameter('linkDistance', parseInt(linkSlider.value));
-            });
+            }, 50));
         }
+    }
 
-        if (collisionSlider) {
-            collisionSlider.addEventListener('input', () => {
-                collisionValue.textContent = collisionSlider.value;
-                updateForceParameter('collisionStrength', parseFloat(collisionSlider.value));
-            });
+    // Helper function to update slider value displays
+    function updateSliderValue(spanId, value) {
+        const span = document.getElementById(spanId);
+        if (span) {
+            span.textContent = value;
         }
     }
 
@@ -178,7 +166,7 @@ function initializeUIControls() {
         const forceControls = document.getElementById('force-controls');
         if (!forceControls) return;
 
-        const forceLayouts = ['fcose', 'cose', 'cola', 'euler'];
+        const forceLayouts = ['fcose', 'euler'];
 
         if (forceLayouts.includes(layoutName)) {
             forceControls.style.display = 'block';
@@ -186,19 +174,27 @@ function initializeUIControls() {
             // Update labels based on layout type
             const chargeLabel = document.querySelector('label[for="charge-slider"]');
             const linkLabel = document.querySelector('label[for="link-slider"]');
-
-            if (layoutName === 'cola') {
-                if (chargeLabel) chargeLabel.innerHTML = 'Node Spacing: <span id="charge-value">-1800</span>';
-                if (linkLabel) linkLabel.innerHTML = 'Edge Length: <span id="link-value">200</span>';
-            } else {
-                if (chargeLabel) chargeLabel.innerHTML = 'Repulsion Force: <span id="charge-value">-1800</span>';
-                if (linkLabel) linkLabel.innerHTML = 'Link Distance: <span id="link-value">200</span>';
-            }
+            updateLayoutSpecificControls(layoutName);
         } else {
             forceControls.style.display = 'none';
         }
     }
 
+    /**
+     * Update control labels and values for specific layout types
+     */
+    function updateLayoutSpecificControls(layoutName) {
+        const linkSlider = document.getElementById('link-slider');
+        const linkLabel = document.querySelector('label[for="link-slider"]');
+
+        if (linkSlider && linkLabel) {
+            linkSlider.min = 50;
+            linkSlider.max = 400;
+            linkSlider.step = 10;
+            linkSlider.value = 200;
+            linkLabel.innerHTML = `Link Distance: <span id="link-value">200</span>`;
+        }
+    }
     /**
      * Debounce function to limit rapid firing of an event
      */

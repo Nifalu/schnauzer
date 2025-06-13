@@ -6,6 +6,10 @@ function initializeVisualization() {
     let currentLayout; // Current layout instance
     let layoutName = 'cose'; // Default to built-in cose layout
 
+    let currentForces = {
+        linkDistance: null
+    };
+
     // Initialize Cytoscape
     function initCytoscape() {
         cy = cytoscape({
@@ -17,18 +21,51 @@ function initializeVisualization() {
                     selector: 'node',
                     style: {
                         'background-color': 'data(color)',
-                        'label': 'data(name)',
+                        'label': function(ele) {
+                            const name = ele.data('name') || '';
+                            if (name.length <= 16) {
+                                return name;
+                            } else {
+                                // For names longer than 16 chars
+                                let processedName = name;
+                                if (name.length > 32) {
+                                    processedName = name.substring(0, 32);
+                                }
+
+                                // Split into two lines at the middle
+                                const midPoint = Math.floor(processedName.length / 2);
+                                // Try to find a good break point (space, dash, underscore)
+                                let breakPoint = midPoint;
+                                for (let i = midPoint; i >= Math.max(0, midPoint - 8); i--) {
+                                    if (processedName[i] === ' ' || processedName[i] === '-' || processedName[i] === '_') {
+                                        breakPoint = i;
+                                        break;
+                                    }
+                                }
+
+                                if (breakPoint === midPoint) {
+                                    // No good break point found, just split at middle
+                                    return processedName.substring(0, midPoint) + '\n' + processedName.substring(midPoint);
+                                } else {
+                                    // Split at the break point
+                                    return processedName.substring(0, breakPoint) + '\n' + processedName.substring(breakPoint + 1);
+                                }
+                            }
+                        },
                         'text-valign': 'center',
                         'text-halign': 'center',
                         'text-wrap': 'wrap',
                         'text-max-width': '100px',
                         'width': 'label',
-                        'height': 60,
-                        'padding': 20,
+                        'height': function(ele) {
+                            const name = ele.data('name') || '';
+                            return name.length > 16 ? 40 : 25; // Taller for two-line labels
+                        },
+                        'padding': 10,
                         'shape': 'roundrectangle',
-                        'border-width': 2,
+                        'border-width': 1,
                         'border-color': '#fff',
-                        'font-size': 12,
+                        'font-size': 14,
                         'color': function(ele) {
                             return window.SchGraphApp.utils.getTextColor(ele.data('color') || '#999');
                         }
@@ -191,10 +228,57 @@ function initializeVisualization() {
             const container = cy.container();
             const containerRect = container.getBoundingClientRect();
 
-            // Build tooltip content
-            let html = `<h4>${escapeHTML(data.name || "Node")}</h4>`;
+            // Build tooltip content with truncated name
+            const fullName = data.name || "Node";
+            let displayName = fullName;
 
-            if (data.description) {
+            if (fullName.length > 16) {
+                let processedName = fullName;
+                if (fullName.length > 32) {
+                    processedName = fullName.substring(0, 32);
+                }
+
+                // Split into two lines
+                const midPoint = Math.floor(processedName.length / 2);
+                let breakPoint = midPoint;
+                for (let i = midPoint; i >= Math.max(0, midPoint - 8); i--) {
+                    if (processedName[i] === ' ' || processedName[i] === '-' || processedName[i] === '_') {
+                        breakPoint = i;
+                        break;
+                    }
+                }
+
+                if (breakPoint === midPoint) {
+                    displayName = processedName.substring(0, midPoint) + '<br>' + processedName.substring(midPoint);
+                } else {
+                    displayName = processedName.substring(0, breakPoint) + '<br>' + processedName.substring(breakPoint + 1);
+                }
+            }
+
+            let html = `<h4>${displayName}</h4>`;
+
+            // Add parents if available
+            if (data.parents && Array.isArray(data.parents) && data.parents.length > 0) {
+                const parentNames = data.parents.map(p => {
+                    if (typeof p === 'object' && p.name) return p.name;
+                    if (typeof p === 'object' && p.id) return p.id;
+                    return String(p);
+                });
+                html += `<p><strong>Parents:</strong> ${escapeHTML(parentNames.join(', '))}</p>`;
+            }
+
+            // Add children if available
+            if (data.children && Array.isArray(data.children) && data.children.length > 0) {
+                const childNames = data.children.map(c => {
+                    if (typeof c === 'object' && c.name) return c.name;
+                    if (typeof c === 'object' && c.id) return c.id;
+                    return String(c);
+                });
+                html += `<p><strong>Children:</strong> ${escapeHTML(childNames.join(', '))}</p>`;
+            }
+
+            // Add description if available
+            if (data.description && data.description.trim() !== '') {
                 const desc = data.description.length > 150 ?
                     data.description.substring(0, 147) + "..." :
                     data.description;
@@ -213,7 +297,9 @@ function initializeVisualization() {
         cy.on('mouseover', 'edge', function(evt) {
             const edge = evt.target;
             const data = edge.data();
-            const midpoint = edge.midpoint();
+
+            // Get the rendered midpoint position (this is in screen coordinates)
+            const midpoint = edge.renderedMidpoint();
             const container = cy.container();
             const containerRect = container.getBoundingClientRect();
 
@@ -222,17 +308,12 @@ function initializeVisualization() {
             html += `<p><strong>From:</strong> ${escapeHTML(edge.source().data('name'))}</p>`;
             html += `<p><strong>To:</strong> ${escapeHTML(edge.target().data('name'))}</p>`;
 
-            // Position and show tooltip
+            // Position and show tooltip (using rendered coordinates)
             showTooltip(
                 html,
                 containerRect.left + midpoint.x + 15,
                 containerRect.top + midpoint.y - 30
             );
-        });
-
-        // Hide tooltip on mouseout
-        cy.on('mouseout', 'node, edge', function() {
-            hideTooltip();
         });
     }
 
@@ -289,50 +370,37 @@ function initializeVisualization() {
 
         // Layout-specific options
         const layoutConfigs = {
-            'euler': {
-                name: 'euler',
-                springLength: edge => 200, // Can be a function
-                springCoeff: edge => 0.0008,
-                mass: node => 4,
-                gravity: -1.2,
-                pull: 0.001,
-                theta: 0.666,
-                dragCoeff: 0.02,
-                movementThreshold: 1,
-                timeStep: 20,
-                refresh: 10,
-                animate: true,
-                animationDuration: undefined, // Run indefinitely!
-                animationThreshold: 0.5,
-                ungrabifyWhileSimulating: false, // Allow dragging during simulation
-                fit: true,
-                padding: 30,
-                randomize: false,
-                infinite: true
-            },
             'fcose': {
                 idealEdgeLength: 200,
-                nodeOverlap: 50,
-                nodeRepulsion: 4500,
+                nodeOverlap: 1,
+                nodeRepulsion: 2000,  // Much lower
                 numIter: 2500,
                 tile: true,
                 tilingPaddingVertical: 10,
                 tilingPaddingHorizontal: 10,
-                randomize: true
+                randomize: true,
+                quality: 'default'
             },
-            'cose': {
-                idealEdgeLength: 200,
-                nodeOverlap: 20,
-                nodeRepulsion: 400000,
-                numIter: 1000,
-                gravity: 80,
-                randomize: true
-            },
-            'cola': {
-                nodeSpacing: 50,
-                edgeLength: 200,
-                alignment: 'center',
-                randomize: true
+            'euler': {
+                name: 'euler',
+                springLength: edge => 200,
+                springCoeff: edge => 0.0002,  // Much lower
+                mass: node => 8,  // Higher mass for stability
+                gravity: -0.3,  // Much lower
+                pull: 0.0002,  // Much lower
+                theta: 0.8,
+                dragCoeff: 0.05,  // Higher drag
+                movementThreshold: 0.5,  // Lower threshold
+                timeStep: 10,  // Smaller timestep
+                refresh: 20,
+                animate: true,
+                animationDuration: undefined,
+                animationThreshold: 0.2,  // Lower threshold
+                ungrabifyWhileSimulating: false,
+                fit: true,
+                padding: 30,
+                randomize: false,
+                infinite: true
             },
             'breadthfirst': {
                 directed: true,
@@ -357,10 +425,21 @@ function initializeVisualization() {
             },
             'circle': {
                 avoidOverlap: true,
-                radius: undefined, // Auto-calculate
+                avoidOverlapPadding: 30,
+                radius: function(){
+                    const nodeCount = cy.nodes().length;
+                    const minRadius = 50;
+                    const radiusPerNode = 5;
+                    return Math.max(minRadius, nodeCount * radiusPerNode);
+                },
                 startAngle: 0,
-                sweep: 2 * Math.PI,
-                clockwise: true
+                sweep: (() => {
+                    const nodeCount = cy.nodes().length;
+                    if (nodeCount <= 1) return 2 * Math.PI;
+                    // Leave a gap to prevent first and last node overlap
+                    return 2 * Math.PI * (nodeCount - 1) / nodeCount;
+                })(),
+                clockwise: true,
             },
             'concentric': {
                 minNodeSpacing: 50,
@@ -374,9 +453,6 @@ function initializeVisualization() {
                 avoidOverlapPadding: 10,
                 condense: false
             },
-            'random': {
-                boundingBox: undefined // Use full area
-            }
         };
 
         return Object.assign(baseOptions, layoutConfigs[layoutType] || {});
@@ -388,48 +464,10 @@ function initializeVisualization() {
             currentLayout.stop();
         }
 
-        // Check if layout is available
-        const availableLayouts = ['cose', 'breadthfirst', 'circle', 'concentric', 'grid', 'random'];
-
-        // Check for extension layouts
-        if (typeof cytoscape !== 'undefined' && cy) {
-            // Check if layout exists by trying to create a test layout
-            try {
-                // Test if the layout is available
-                const testLayout = cy.layout({ name: layoutName, animate: false, stop: true });
-                // If we get here, the layout exists
-            } catch (e) {
-                if (layoutName === 'euler') {
-                    console.warn('Euler layout not loaded, falling back to CoSE');
-                    layoutName = 'cose';
-                } else if (layoutName === 'fcose') {
-                    console.warn('fCoSE layout not loaded, falling back to CoSE');
-                    layoutName = 'cose';
-                } else if (layoutName === 'cola') {
-                    console.warn('Cola layout not loaded, falling back to CoSE');
-                    layoutName = 'cose';
-                } else if (layoutName === 'dagre') {
-                    console.warn('Dagre layout not loaded, falling back to breadthfirst');
-                    layoutName = 'breadthfirst';
-                }
-            }
-        }
-
         const layoutOptions = getLayoutOptions(layoutName);
-
-        try {
-            currentLayout = cy.layout(layoutOptions);
-            currentLayout.run();
-        } catch (error) {
-            console.error('Layout error:', error);
-            // Fallback to a simple layout
-            layoutName = 'cose';
-            const fallbackOptions = getLayoutOptions('cose');
-            currentLayout = cy.layout(fallbackOptions);
-            currentLayout.run();
-        }
+        currentLayout = cy.layout(layoutOptions);
+        currentLayout.run();
     }
-
     // Set layout by name
     function setLayout(newLayoutName) {
         layoutName = newLayoutName;
@@ -440,15 +478,12 @@ function initializeVisualization() {
         if (layoutDisplay) {
             const layoutNames = {
                 'fcose': 'fCoSE',
-                'cose': 'CoSE',
-                'cola': 'Cola',
                 'breadthfirst': 'Tree',
                 'dagre': 'Dagre',
                 'klay': 'Klay',
                 'circle': 'Circle',
                 'concentric': 'Concentric',
                 'grid': 'Grid',
-                'random': 'Random'
             };
             layoutDisplay.textContent = layoutNames[layoutName] || layoutName;
         }
@@ -463,64 +498,58 @@ function initializeVisualization() {
 
     // Update force parameters
     function updateForces(forces) {
-        // Only apply to force-directed layouts
-        if (['fcose', 'cose', 'cola', 'euler'].includes(layoutName)) {
-            // Save current positions
-            const positions = {};
-            cy.nodes().forEach(node => {
-                positions[node.id()] = {
-                    x: node.position('x'),
-                    y: node.position('y')
-                };
-            });
-
-            const options = getLayoutOptions(layoutName);
-
-            // IMPORTANT: Don't randomize and use current positions
-            options.randomize = false;
-            options.positions = positions; // Use saved positions
-            options.fit = false; // Don't re-fit to viewport
-
-            if (layoutName === 'euler') {
-                // Euler-specific parameter mapping
-                if (forces.charge !== undefined) {
-                    options.gravity = forces.charge / 1000;
-                }
-                if (forces.linkDistance !== undefined) {
-                    options.springLength = forces.linkDistance;
-                }
-                if (forces.collisionStrength !== undefined) {
-                    options.mass = 4 / forces.collisionStrength;
-                }
-            } else {
-                // Keep existing logic for other layouts
-                if (forces.charge !== undefined) {
-                    if (layoutName === 'fcose') {
-                        options.nodeRepulsion = Math.abs(forces.charge) * 2.5;
-                    } else if (layoutName === 'cose') {
-                        options.nodeRepulsion = Math.abs(forces.charge) * 200;
-                    }
-                }
-                if (forces.linkDistance !== undefined) {
-                    options.idealEdgeLength = forces.linkDistance;
-                    if (layoutName === 'cola') {
-                        options.edgeLength = forces.linkDistance;
-                    }
-                }
-                if (forces.collisionStrength !== undefined) {
-                    options.nodeOverlap = 50 * forces.collisionStrength;
-                }
-            }
-
-            // Stop current layout if running
-            if (currentLayout) {
-                currentLayout.stop();
-            }
-
-            // Run with preserved positions
-            currentLayout = cy.layout(options);
-            currentLayout.run();
+        // Only apply to physics layouts
+        if (!['fcose', 'euler'].includes(layoutName)) {
+            return;
         }
+
+        // Only update if link distance changed
+        if (forces.linkDistance === undefined || forces.linkDistance === currentForces.linkDistance) {
+            return;
+        }
+
+        currentForces.linkDistance = forces.linkDistance;
+
+        // Special handling for Euler - it's a continuous simulation
+        if (layoutName === 'euler' && currentLayout) {
+            try {
+                currentLayout.options.springLength = forces.linkDistance;
+                return;
+            } catch (e) {
+                console.log('Euler parameter update failed, restarting layout');
+            }
+        }
+
+        // For fCoSE, do incremental update
+        const currentPositions = {};
+        cy.nodes().forEach(node => {
+            currentPositions[node.id()] = {
+                x: node.position('x'),
+                y: node.position('y')
+            };
+        });
+
+        const options = getLayoutOptions(layoutName);
+        options.idealEdgeLength = forces.linkDistance;
+
+        // Start from current positions and animate smoothly
+        options.randomize = false;
+        options.positions = node => {
+            const pos = currentPositions[node.id()];
+            return pos ? { x: pos.x, y: pos.y } : undefined;
+        };
+        options.fit = false;
+        options.animate = true;
+        options.animationDuration = 300;
+        options.animationEasing = 'ease-out';
+        options.numIter = 250; // Reduced for incremental updates
+
+        if (currentLayout) {
+            currentLayout.stop();
+        }
+
+        currentLayout = cy.layout(options);
+        currentLayout.run();
     }
 
     // Toggle physics on/off

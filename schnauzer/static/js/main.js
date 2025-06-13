@@ -109,7 +109,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     app.viz.setLayout(layoutName);
 
                     // Update physics button state
-                    const forceLayouts = ['fcose', 'cose', 'cola', 'euler'];
+                    const forceLayouts = ['fcose', 'euler'];
                     const physicsBtn = app.elements.togglePhysicsBtn;
 
                     if (forceLayouts.includes(layoutName)) {

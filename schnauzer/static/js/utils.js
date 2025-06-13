@@ -21,9 +21,6 @@ function formatElementDetails(element, elementType = 'node') {
 
     let html = '';
 
-    // Show name at the top
-    html += `<p><strong>Name:</strong> ${escapeHTML(element.name) || 'Unknown'}</p>`;
-
     if (element.type) {
         html += `<p><strong>Type:</strong> ${escapeHTML(element.type) || 'Unknown'}</p>`;
     }

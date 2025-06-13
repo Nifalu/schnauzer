@@ -8,6 +8,9 @@
     <!-- Bootstrap CSS from CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
 
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
@@ -23,14 +26,37 @@
                         <div class="graph-controls">
                             <div class="btn-group">
                                 <button id="reset-zoom" class="btn btn-sm btn-outline-secondary">Reset View</button>
-                                <button id="toggle-physics" class="btn btn-sm btn-outline-secondary">Freeze Nodes</button>
-                                <button id="toggle-layout" class="btn btn-sm btn-outline-primary">Tree Layout</button>
+                                <button id="toggle-physics" class="btn btn-sm btn-outline-secondary">Freeze Layout</button>
+
+                                <!-- Layout dropdown -->
+                                <div class="dropdown d-inline-block">
+                                    <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" id="layoutDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="bi bi-diagram-3"></i> Layout: <span id="current-layout">CoSE</span>
+                                    </button>
+                                    <ul class="dropdown-menu" aria-labelledby="layoutDropdown">
+                                        <li><h6 class="dropdown-header">Force-Directed</h6></li>
+                                        <li><a class="dropdown-item layout-option active" href="#" data-layout="cose">CoSE (Spring)</a></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="fcose">fCoSE (Fast)</a></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="cola">Cola (Constraint)</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header">Hierarchical</h6></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="breadthfirst">Breadth-First Tree</a></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="dagre">Dagre (DAG)</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header">Other</h6></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="circle">Circle</a></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="concentric">Concentric</a></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="grid">Grid</a></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="random">Random</a></li>
+                                    </ul>
+                                </div>
+
                                 <button id="export-graph" class="btn btn-sm btn-outline-secondary">
                                     <i class="bi bi-download"></i> Export
                                 </button>
                             </div>
                         </div>
-                        <!-- D3 will render the SVG here -->
+                        <!-- Cytoscape will render here -->
                     </div>
                 </div>
 
@@ -85,6 +111,27 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Force controls panel (shown only for force-directed layouts) -->
+                <div class="card mb-4" id="force-controls">
+                    <div class="card-header">
+                        <h5 class="mb-0">Layout Controls</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="charge-slider" class="form-label">Repulsion Force: <span id="charge-value">-1800</span></label>
+                            <input type="range" class="form-range" id="charge-slider" min="-3000" max="-500" step="100" value="-1800">
+                        </div>
+                        <div class="mb-3">
+                            <label for="link-slider" class="form-label">Link Distance: <span id="link-value">200</span></label>
+                            <input type="range" class="form-range" id="link-slider" min="50" max="400" step="10" value="200">
+                        </div>
+                        <div class="mb-3">
+                            <label for="collision-slider" class="form-label">Collision Strength: <span id="collision-value">1.0</span></label>
+                            <input type="range" class="form-range" id="collision-slider" min="0.1" max="1.5" step="0.1" value="1.0">
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -95,17 +142,33 @@
     <!-- Socket.IO from CDN -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-    <!-- D3.js from CDN -->
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-
-    <!-- Dagre -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
-
     <!-- Bootstrap JS Bundle with Popper from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <!-- Cytoscape.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+
+    <!-- Layout extensions - try to load them but app will work without them -->
+    <script>
+        // Try to load extensions, but don't fail if they're not available
+        const layoutExtensions = [
+            { url: 'https://unpkg.com/layout-base@2.0.1/layout-base.js', name: 'layout-base' },
+            { url: 'https://unpkg.com/cose-base@2.2.0/cose-base.js', name: 'cose-base' },
+            { url: 'https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js', name: 'fcose' },
+            { url: 'https://unpkg.com/webcola@3.4.0/WebCola/cola.min.js', name: 'cola' },
+            { url: 'https://unpkg.com/cytoscape-cola@2.5.1/cytoscape-cola.js', name: 'cytoscape-cola' },
+            { url: 'https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js', name: 'dagre' },
+            { url: 'https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js', name: 'cytoscape-dagre' }
+        ];
+
+        // Load extensions sequentially
+        layoutExtensions.forEach(ext => {
+            const script = document.createElement('script');
+            script.src = ext.url;
+            script.onerror = () => console.warn(`Failed to load ${ext.name}, some layouts may not be available`);
+            document.head.appendChild(script);
+        });
+    </script>
 
     <!-- Custom JavaScript for graph visualization (modular structure) -->
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>

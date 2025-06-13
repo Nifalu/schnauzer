@@ -1,4 +1,4 @@
-// main.js - Main application initialization and socket handling
+// main.js - Main application initialization and socket handling for Cytoscape version
 // This file handles socket connection, global state, and initializes the application
 
 // Wait for the DOM to load
@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', function() {
         physicsEnabled: true,
         currentGraph: null,
         selectedNode: null,
+        selectedEdge: null,
         tooltipTimeout: null,
         isMouseDown: false
     };
@@ -25,7 +26,6 @@ document.addEventListener('DOMContentLoaded', function() {
         nodeDetailsContent: document.getElementById('node-details-content'),
         resetZoomBtn: document.getElementById('reset-zoom'),
         togglePhysicsBtn: document.getElementById('toggle-physics'),
-        requestUpdateBtn: document.getElementById('request-update'),
         nodeCountEl: document.getElementById('node-count'),
         edgeCountEl: document.getElementById('edge-count')
     };
@@ -76,42 +76,75 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // UI Button handlers
     function setupUIEventListeners() {
-        // reset zoom button
+        // Reset zoom button
         app.elements.resetZoomBtn.addEventListener('click', function() {
-            console.log('Reset zoom button clicked'); // Debug log
             if (app.viz && app.viz.resetZoom) {
                 app.viz.resetZoom();
-            } else {
-                console.error('resetZoom function not found');
             }
         });
 
         // Toggle physics button
         app.elements.togglePhysicsBtn.addEventListener('click', function() {
             app.state.physicsEnabled = !app.state.physicsEnabled;
-            this.textContent = app.state.physicsEnabled ? 'Freeze Nodes' : 'Enable Physics';
-            app.viz.togglePhysics(app.state.physicsEnabled);
+            const result = app.viz.togglePhysics(app.state.physicsEnabled);
+
+            if (result) {
+                // Physics was toggled
+                this.textContent = app.state.physicsEnabled ? 'Freeze Layout' : 'Resume Layout';
+            } else {
+                // Physics doesn't apply to current layout
+                showStatus('Physics controls only apply to force-directed layouts', 'info', 3000);
+            }
         });
 
-        // Toggle Tree view
-        document.getElementById('toggle-layout').addEventListener('click', function() {
-            const isTree = app.viz.toggleTreeLayout();
-            this.textContent = isTree ? 'Force Layout' : 'Tree Layout';
-            this.classList.toggle('btn-outline-primary');
-            this.classList.toggle('btn-primary');
+        // Layout dropdown handlers
+        const layoutOptions = document.querySelectorAll('.layout-option');
+        layoutOptions.forEach(option => {
+            option.addEventListener('click', function(e) {
+                e.preventDefault();
+                const layoutName = this.getAttribute('data-layout');
+
+                // Set the new layout
+                if (app.viz && app.viz.setLayout) {
+                    app.viz.setLayout(layoutName);
+
+                    // Update physics button state
+                    const forceLayouts = ['fcose', 'cose', 'cola'];
+                    const physicsBtn = app.elements.togglePhysicsBtn;
+
+                    if (forceLayouts.includes(layoutName)) {
+                        // Enable physics button for force-directed layouts
+                        physicsBtn.disabled = false;
+                        physicsBtn.classList.remove('disabled');
+                        // Update control panel visibility
+                        if (app.ui && app.ui.updateControlPanelVisibility) {
+                            app.ui.updateControlPanelVisibility(layoutName);
+                        }
+                    } else {
+                        // Disable physics button for non-force layouts
+                        physicsBtn.disabled = true;
+                        physicsBtn.classList.add('disabled');
+                        // Hide force controls
+                        if (app.ui && app.ui.updateControlPanelVisibility) {
+                            app.ui.updateControlPanelVisibility(layoutName);
+                        }
+                    }
+
+                    // Update active state in dropdown
+                    layoutOptions.forEach(opt => opt.classList.remove('active'));
+                    this.classList.add('active');
+                }
+            });
         });
 
-        // export button
+        // Export button
         const exportBtn = document.getElementById('export-graph');
         if (exportBtn) {
             exportBtn.addEventListener('click', function() {
-                console.log('Export button clicked'); // Debug log
-                // Use the proper exportGraphAsPNG function from utils
-                if (window.SchGraphApp.utils && window.SchGraphApp.utils.exportGraphAsPNG) {
+                if (app.viz && app.viz.exportAsPNG) {
+                    app.viz.exportAsPNG();
+                } else if (window.SchGraphApp.utils && window.SchGraphApp.utils.exportGraphAsPNG) {
                     window.SchGraphApp.utils.exportGraphAsPNG();
-                } else {
-                    // Fallback to local implementation if needed
-                    exportGraphAsPNG();
                 }
             });
         }
@@ -123,7 +156,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const searchBox = document.getElementById('search-nodes');
                 if (searchBox) {
                     searchBox.value = '';
-                    // Trigger the input event to clear search
                     searchBox.dispatchEvent(new Event('input'));
                 }
             });
@@ -135,13 +167,25 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!graphData) return;
 
         // Update node count
-        const nodeCount = graphData.nodes ? graphData.nodes.length : 0;
+        let nodeCount = 0;
+        if (graphData.elements?.nodes) {
+            nodeCount = graphData.elements.nodes.length;
+        } else if (graphData.nodes) {
+            nodeCount = graphData.nodes.length;
+        }
+
         if (app.elements.nodeCountEl) {
             app.elements.nodeCountEl.textContent = nodeCount;
         }
 
         // Update edge/link count
-        const edgeCount = graphData.edges ? graphData.edges.length : 0;
+        let edgeCount = 0;
+        if (graphData.elements?.edges) {
+            edgeCount = graphData.elements.edges.length;
+        } else if (graphData.edges) {
+            edgeCount = graphData.edges.length;
+        }
+
         if (app.elements.edgeCountEl) {
             app.elements.edgeCountEl.textContent = edgeCount;
         }

@@ -1,4 +1,4 @@
-// ui-controls.js - UI controls and user interaction handling
+// ui-controls.js - UI controls and user interaction handling for Cytoscape version
 
 /**
  * Initialize UI controls and event handlers
@@ -7,7 +7,7 @@
 function initializeUIControls() {
     const app = window.SchGraphApp;
 
-    // Add export button
+    // Add export button if not exists
     if (!document.getElementById('export-graph')) {
         const exportBtn = document.createElement('button');
         exportBtn.id = 'export-graph';
@@ -20,6 +20,7 @@ function initializeUIControls() {
         }
     }
 
+    // Create force controls panel if not exists
     if (!document.getElementById('force-controls')) {
         const controlsPanel = document.createElement('div');
         controlsPanel.id = 'force-controls';
@@ -55,14 +56,20 @@ function initializeUIControls() {
                 container.appendChild(controlsPanel);
             }
         }
-        setupForceControls()
     }
 
-    // Set up search functionality if search box exists
+    // Set up search functionality
     setupSearch();
 
+    // Set up force controls
+    setupForceControls();
 
+    // Show force controls by default since we start with 'cose' layout
+    updateControlPanelVisibility('cose');
 
+    /**
+     * Set up force control sliders
+     */
     function setupForceControls() {
         const chargeSlider = document.getElementById('charge-slider');
         const linkSlider = document.getElementById('link-slider');
@@ -72,32 +79,41 @@ function initializeUIControls() {
         const collisionValue = document.getElementById('collision-value');
 
         // Update forces immediately when sliders change
-        chargeSlider.addEventListener('input', () => {
-            chargeValue.textContent = chargeSlider.value;
-            updateForceParameter('charge', parseInt(chargeSlider.value));
-        });
+        if (chargeSlider) {
+            chargeSlider.addEventListener('input', () => {
+                chargeValue.textContent = chargeSlider.value;
+                updateForceParameter('charge', parseInt(chargeSlider.value));
+            });
+        }
 
-        linkSlider.addEventListener('input', () => {
-            linkValue.textContent = linkSlider.value;
-            updateForceParameter('linkDistance', parseInt(linkSlider.value));
-        });
+        if (linkSlider) {
+            linkSlider.addEventListener('input', () => {
+                linkValue.textContent = linkSlider.value;
+                updateForceParameter('linkDistance', parseInt(linkSlider.value));
+            });
+        }
 
-        collisionSlider.addEventListener('input', () => {
-            collisionValue.textContent = collisionSlider.value;
-            updateForceParameter('collisionStrength', parseFloat(collisionSlider.value));
-        });
+        if (collisionSlider) {
+            collisionSlider.addEventListener('input', () => {
+                collisionValue.textContent = collisionSlider.value;
+                updateForceParameter('collisionStrength', parseFloat(collisionSlider.value));
+            });
+        }
     }
-
-    function updateForceParameter(type, value) {
-    if (window.SchGraphApp && window.SchGraphApp.viz) {
-        const forces = {};
-        forces[type] = value;
-        window.SchGraphApp.viz.updateForces(forces);
-    }
-}
 
     /**
-     * Set up search functionality if search box exists
+     * Update force parameters in the visualization
+     */
+    function updateForceParameter(type, value) {
+        if (window.SchGraphApp && window.SchGraphApp.viz) {
+            const forces = {};
+            forces[type] = value;
+            window.SchGraphApp.viz.updateForces(forces);
+        }
+    }
+
+    /**
+     * Set up search functionality for Cytoscape
      */
     function setupSearch() {
         const searchBox = document.getElementById('search-nodes');
@@ -106,39 +122,37 @@ function initializeUIControls() {
         searchBox.addEventListener('input', debounce((event) => {
             const searchTerm = event.target.value.toLowerCase().trim();
 
-            // If no search term, show all nodes
+            // Get the Cytoscape instance
+            const cy = window.SchGraphApp.viz?.getCy?.();
+            if (!cy) return;
+
+            // If no search term, show all elements
             if (!searchTerm) {
-                d3.selectAll('.node').style('opacity', 1);
-                d3.selectAll('.link').style('opacity', 0.6);
+                cy.elements().removeClass('dimmed');
+                cy.elements().removeClass('highlighted');
                 return;
             }
 
+            // Reset all elements to dimmed state
+            cy.elements().addClass('dimmed');
+
             // Find matching nodes
-            const matchingNodes = new Set();
+            const matchingNodes = cy.nodes().filter(node => {
+                const data = node.data();
+                const nodeMatch =
+                    (data.name || '').toLowerCase().includes(searchTerm) ||
+                    (data.type || '').toLowerCase().includes(searchTerm) ||
+                    (data.description || '').toLowerCase().includes(searchTerm);
 
-            d3.selectAll('.node').each(function(d) {
-                const nodeData = d;
-                const nodeLabel = (nodeData.name || '').toLowerCase();
-                const nodeMatch = nodeLabel.includes(searchTerm) ||
-                                 (nodeData.type || '').toLowerCase().includes(searchTerm) ||
-                                 (nodeData.category || '').toLowerCase().includes(searchTerm);
-
-                if (nodeMatch) {
-                    matchingNodes.add(nodeData.name);
-                    d3.select(this).style('opacity', 1);
-                } else {
-                    d3.select(this).style('opacity', 0.2);
-                }
+                return nodeMatch;
             });
 
-            // Highlight links connected to matching nodes
-            d3.selectAll('.link').style('opacity', function(d) {
-                if (matchingNodes.has(d.source.name) && matchingNodes.has(d.target.name)) {
-                    return 0.8;
-                } else {
-                    return 0.1;
-                }
-            });
+            // Highlight matching nodes
+            matchingNodes.removeClass('dimmed').addClass('highlighted');
+
+            // Highlight edges between matching nodes
+            matchingNodes.edgesWith(matchingNodes).removeClass('dimmed').addClass('highlighted');
+
         }, 200));
 
         // Clear search button
@@ -148,6 +162,34 @@ function initializeUIControls() {
                 searchBox.value = '';
                 searchBox.dispatchEvent(new Event('input'));
             });
+        }
+    }
+
+    /**
+     * Update control panel visibility based on layout type
+     */
+    function updateControlPanelVisibility(layoutName) {
+        const forceControls = document.getElementById('force-controls');
+        if (!forceControls) return;
+
+        const forceLayouts = ['fcose', 'cose', 'cola'];
+
+        if (forceLayouts.includes(layoutName)) {
+            forceControls.style.display = 'block';
+
+            // Update labels based on layout type
+            const chargeLabel = document.querySelector('label[for="charge-slider"]');
+            const linkLabel = document.querySelector('label[for="link-slider"]');
+
+            if (layoutName === 'cola') {
+                if (chargeLabel) chargeLabel.innerHTML = 'Node Spacing: <span id="charge-value">-1800</span>';
+                if (linkLabel) linkLabel.innerHTML = 'Edge Length: <span id="link-value">200</span>';
+            } else {
+                if (chargeLabel) chargeLabel.innerHTML = 'Repulsion Force: <span id="charge-value">-1800</span>';
+                if (linkLabel) linkLabel.innerHTML = 'Link Distance: <span id="link-value">200</span>';
+            }
+        } else {
+            forceControls.style.display = 'none';
         }
     }
 
@@ -165,7 +207,7 @@ function initializeUIControls() {
 
     // Return public API
     return {
-
+        updateControlPanelVisibility
     };
 }
 

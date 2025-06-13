@@ -126,31 +126,36 @@ function initializeUIControls() {
             const cy = window.SchGraphApp.viz?.getCy?.();
             if (!cy) return;
 
-            // If no search term, show all elements
+            // Remove all search-related classes first
+            cy.elements().removeClass('dimmed highlighted');
+
+            // If no search term, just return (all elements visible)
             if (!searchTerm) {
-                cy.elements().removeClass('dimmed');
-                cy.elements().removeClass('highlighted');
                 return;
             }
 
-            // Reset all elements to dimmed state
+            // Add dimmed to ALL elements first
             cy.elements().addClass('dimmed');
 
             // Find matching nodes
             const matchingNodes = cy.nodes().filter(node => {
                 const data = node.data();
-                const nodeMatch =
-                    (data.name || '').toLowerCase().includes(searchTerm) ||
-                    (data.type || '').toLowerCase().includes(searchTerm) ||
-                    (data.description || '').toLowerCase().includes(searchTerm);
+                // Check both id and name fields (important for nodes like 'A', 'B', etc.)
+                const nodeId = (data.id || '').toLowerCase();
+                const nodeName = (data.name || '').toLowerCase();
+                const nodeType = (data.type || '').toLowerCase();
+                const nodeDesc = (data.description || '').toLowerCase();
 
-                return nodeMatch;
+                return nodeId.includes(searchTerm) ||
+                       nodeName.includes(searchTerm) ||
+                       nodeType.includes(searchTerm) ||
+                       nodeDesc.includes(searchTerm);
             });
 
-            // Highlight matching nodes
+            // Remove dimmed and add highlighted to matching nodes
             matchingNodes.removeClass('dimmed').addClass('highlighted');
 
-            // Highlight edges between matching nodes
+            // Also highlight edges between matching nodes
             matchingNodes.edgesWith(matchingNodes).removeClass('dimmed').addClass('highlighted');
 
         }, 200));
@@ -160,6 +165,7 @@ function initializeUIControls() {
         if (clearBtn) {
             clearBtn.addEventListener('click', () => {
                 searchBox.value = '';
+                // Trigger the input event to clear search
                 searchBox.dispatchEvent(new Event('input'));
             });
         }
@@ -172,7 +178,7 @@ function initializeUIControls() {
         const forceControls = document.getElementById('force-controls');
         if (!forceControls) return;
 
-        const forceLayouts = ['fcose', 'cose', 'cola'];
+        const forceLayouts = ['fcose', 'cose', 'cola', 'euler'];
 
         if (forceLayouts.includes(layoutName)) {
             forceControls.style.display = 'block';

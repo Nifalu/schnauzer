@@ -244,6 +244,7 @@ function initializeVisualization() {
 
         // Clear existing elements
         cy.elements().remove();
+        cy.elements().removeClass('dimmed highlighted');
 
         // Add new elements
         if (graphData.elements) {
@@ -288,6 +289,27 @@ function initializeVisualization() {
 
         // Layout-specific options
         const layoutConfigs = {
+            'euler': {
+                name: 'euler',
+                springLength: edge => 200, // Can be a function
+                springCoeff: edge => 0.0008,
+                mass: node => 4,
+                gravity: -1.2,
+                pull: 0.001,
+                theta: 0.666,
+                dragCoeff: 0.02,
+                movementThreshold: 1,
+                timeStep: 20,
+                refresh: 10,
+                animate: true,
+                animationDuration: undefined, // Run indefinitely!
+                animationThreshold: 0.5,
+                ungrabifyWhileSimulating: false, // Allow dragging during simulation
+                fit: true,
+                padding: 30,
+                randomize: false,
+                infinite: true
+            },
             'fcose': {
                 idealEdgeLength: 200,
                 nodeOverlap: 50,
@@ -370,16 +392,26 @@ function initializeVisualization() {
         const availableLayouts = ['cose', 'breadthfirst', 'circle', 'concentric', 'grid', 'random'];
 
         // Check for extension layouts
-        if (typeof cytoscape !== 'undefined') {
-            if (layoutName === 'fcose' && !cy._private.extensions['fcose']) {
-                console.warn('fCoSE layout not loaded, falling back to CoSE');
-                layoutName = 'cose';
-            } else if (layoutName === 'cola' && !cy._private.extensions['cola']) {
-                console.warn('Cola layout not loaded, falling back to CoSE');
-                layoutName = 'cose';
-            } else if (layoutName === 'dagre' && !cy._private.extensions['dagre']) {
-                console.warn('Dagre layout not loaded, falling back to breadthfirst');
-                layoutName = 'breadthfirst';
+        if (typeof cytoscape !== 'undefined' && cy) {
+            // Check if layout exists by trying to create a test layout
+            try {
+                // Test if the layout is available
+                const testLayout = cy.layout({ name: layoutName, animate: false, stop: true });
+                // If we get here, the layout exists
+            } catch (e) {
+                if (layoutName === 'euler') {
+                    console.warn('Euler layout not loaded, falling back to CoSE');
+                    layoutName = 'cose';
+                } else if (layoutName === 'fcose') {
+                    console.warn('fCoSE layout not loaded, falling back to CoSE');
+                    layoutName = 'cose';
+                } else if (layoutName === 'cola') {
+                    console.warn('Cola layout not loaded, falling back to CoSE');
+                    layoutName = 'cose';
+                } else if (layoutName === 'dagre') {
+                    console.warn('Dagre layout not loaded, falling back to breadthfirst');
+                    layoutName = 'breadthfirst';
+                }
             }
         }
 
@@ -432,26 +464,60 @@ function initializeVisualization() {
     // Update force parameters
     function updateForces(forces) {
         // Only apply to force-directed layouts
-        if (['fcose', 'cose', 'cola'].includes(layoutName)) {
+        if (['fcose', 'cose', 'cola', 'euler'].includes(layoutName)) {
+            // Save current positions
+            const positions = {};
+            cy.nodes().forEach(node => {
+                positions[node.id()] = {
+                    x: node.position('x'),
+                    y: node.position('y')
+                };
+            });
+
             const options = getLayoutOptions(layoutName);
 
-            if (forces.charge !== undefined) {
-                if (layoutName === 'fcose') {
-                    options.nodeRepulsion = Math.abs(forces.charge) * 2.5;
-                } else if (layoutName === 'cose') {
-                    options.nodeRepulsion = Math.abs(forces.charge) * 200;
+            // IMPORTANT: Don't randomize and use current positions
+            options.randomize = false;
+            options.positions = positions; // Use saved positions
+            options.fit = false; // Don't re-fit to viewport
+
+            if (layoutName === 'euler') {
+                // Euler-specific parameter mapping
+                if (forces.charge !== undefined) {
+                    options.gravity = forces.charge / 1000;
                 }
-            }
-            if (forces.linkDistance !== undefined) {
-                options.idealEdgeLength = forces.linkDistance;
-                if (layoutName === 'cola') {
-                    options.edgeLength = forces.linkDistance;
+                if (forces.linkDistance !== undefined) {
+                    options.springLength = forces.linkDistance;
                 }
-            }
-            if (forces.collisionStrength !== undefined) {
-                options.nodeOverlap = 50 * forces.collisionStrength;
+                if (forces.collisionStrength !== undefined) {
+                    options.mass = 4 / forces.collisionStrength;
+                }
+            } else {
+                // Keep existing logic for other layouts
+                if (forces.charge !== undefined) {
+                    if (layoutName === 'fcose') {
+                        options.nodeRepulsion = Math.abs(forces.charge) * 2.5;
+                    } else if (layoutName === 'cose') {
+                        options.nodeRepulsion = Math.abs(forces.charge) * 200;
+                    }
+                }
+                if (forces.linkDistance !== undefined) {
+                    options.idealEdgeLength = forces.linkDistance;
+                    if (layoutName === 'cola') {
+                        options.edgeLength = forces.linkDistance;
+                    }
+                }
+                if (forces.collisionStrength !== undefined) {
+                    options.nodeOverlap = 50 * forces.collisionStrength;
+                }
             }
 
+            // Stop current layout if running
+            if (currentLayout) {
+                currentLayout.stop();
+            }
+
+            // Run with preserved positions
             currentLayout = cy.layout(options);
             currentLayout.run();
         }
@@ -460,22 +526,29 @@ function initializeVisualization() {
     // Toggle physics on/off
     function togglePhysics(enabled) {
         // Physics only makes sense for force-directed layouts
-        const forceLayouts = ['fcose', 'cose', 'cola'];
+        const forceLayouts = ['fcose', 'cose', 'cola', 'euler'];
 
         if (forceLayouts.includes(layoutName)) {
-            if (enabled) {
-                // Re-enable layout
-                runLayout();
+            app.state.physicsEnabled = enabled;
+
+            if (layoutName === 'euler') {
+                // Euler has special handling
+                if (enabled && currentLayout) {
+                    currentLayout.run(); // Resume simulation
+                } else if (currentLayout) {
+                    currentLayout.stop(); // Pause simulation
+                }
             } else {
-                // Stop current layout
-                if (currentLayout) {
+                // Other layouts
+                if (enabled) {
+                    runLayout();
+                } else if (currentLayout) {
                     currentLayout.stop();
                 }
             }
-            return true; // Physics toggled
+            return true;
         } else {
-            // For non-force layouts, physics doesn't apply
-            return false; // Physics not applicable
+            return false;
         }
     }
 

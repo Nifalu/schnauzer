@@ -11,83 +11,100 @@ function escapeHTML(str = '') {
 }
 
 /**
- * Format node data for display in details panel
- * @param {Object} node - The node data object
- * @returns {string} HTML formatted node details
+ * Format any graph element (node or edge) for display in details panel
+ * @param {Object} element - The element data object (node or edge)
+ * @param {string} elementType - Either 'node' or 'edge'
+ * @returns {string} HTML formatted element details
  */
-function formatNodeDetails(node) {
-    // Debug output to see what data is actually being received
-    if (!node) return '<p>No node data available</p>';
+function formatElementDetails(element, elementType = 'node') {
+    if (!element) return `<p>No ${elementType} data available</p>`;
 
     let html = '';
 
-    // Show node name at the top
-    html += `<p><strong>Name:</strong> ${escapeHTML(node.name) || 'Unknown'}</p>`;
-    html += `<p><strong>Type:</strong> ${escapeHTML(node.type) || 'Unknown'}</p>`;
+    // Show name at the top
+    html += `<p><strong>Name:</strong> ${escapeHTML(element.name) || 'Unknown'}</p>`;
 
-    // Show all attributes except special ones
-    const specialKeys = ['id', 'name', 'type', 'color', 'x', 'y', 'description'];
+    if (element.type) {
+        html += `<p><strong>Type:</strong> ${escapeHTML(element.type) || 'Unknown'}</p>`;
+    }
 
-    for (const [key, value] of Object.entries(node)) {
-        if (!specialKeys.includes(key) && value !== undefined && value !== null) {
-            html += `<p><strong>${escapeHTML(key)}:</strong> ${escapeHTML(value)}</p>`;
+    // Special handling for edge source/target
+    if (elementType === 'edge') {
+        html += `<p><strong>Source:</strong> ${escapeHTML(element.source)}</p>`;
+        html += `<p><strong>Target:</strong> ${escapeHTML(element.target)}</p>`;
+    }
+
+    // If there are labels, display them directly
+    if (element.labels && typeof element.labels === 'object') {
+        for (const [labelKey, labelValue] of Object.entries(element.labels)) {
+            html += `<p><strong>${escapeHTML(labelKey)}:</strong> ${escapeHTML(labelValue)}</p>`;
         }
     }
 
-    // Add description if available
-    if (node.description) {
+    // Define special keys based on element type
+    const baseSpecialKeys = ['id', 'name', 'type', 'color', 'x', 'y', 'description', 'labels'];
+    const specialKeys = elementType === 'node'
+        ? [...baseSpecialKeys, 'parents', 'children']
+        : [...baseSpecialKeys, 'source', 'target'];
+
+    // Show all other attributes
+    for (const [key, value] of Object.entries(element)) {
+        if (!specialKeys.includes(key) && value !== undefined && value !== null) {
+            // Handle arrays and objects
+            if (Array.isArray(value)) {
+                html += `<p><strong>${escapeHTML(key)}:</strong> [${value.map(v => escapeHTML(String(v))).join(', ')}]</p>`;
+            } else if (typeof value === 'object') {
+                html += `<p><strong>${escapeHTML(key)}:</strong> ${escapeHTML(JSON.stringify(value))}</p>`;
+            } else {
+                html += `<p><strong>${escapeHTML(key)}:</strong> ${escapeHTML(value)}</p>`;
+            }
+        }
+    }
+
+    // Special handling for node parents/children
+    if (elementType === 'node') {
+        if (element.parents && Array.isArray(element.parents) && element.parents.length > 0) {
+            html += `<p><strong>Parents:</strong><br>`;
+            const parentNames = element.parents.map(p => {
+                if (typeof p === 'object' && p.name) return p.name;
+                if (typeof p === 'object' && p.id) return p.id;
+                return String(p);
+            });
+            html += escapeHTML(parentNames.join(', '));
+            html += `</p>`;
+        }
+
+        if (element.children && Array.isArray(element.children) && element.children.length > 0) {
+            html += `<p><strong>Children:</strong><br>`;
+            const childNames = element.children.map(c => {
+                if (typeof c === 'object' && c.name) return c.name;
+                if (typeof c === 'object' && c.id) return c.id;
+                return String(c);
+            });
+            html += escapeHTML(childNames.join(', '));
+            html += `</p>`;
+        }
+    }
+
+    // Add description separately if available
+    if (element.description && element.description.trim() !== '') {
         html += `
             <hr>
             <h6>Description</h6>
-            <div class="node-description">${escapeHTML(node.description)}</div>
+            <div class="node-description">${escapeHTML(element.description)}</div>
         `;
     }
 
     return html;
 }
 
-/**
- * Format edge data for display in details panel
- * @param {Object} edge - The edge data object
- * @returns {string} HTML formatted edge details
- */
+// Now create simple wrapper functions
+function formatNodeDetails(node) {
+    return formatElementDetails(node, 'node');
+}
+
 function formatEdgeDetails(edge) {
-    if (!edge) return '';
-
-    let html = '';
-
-    // Show edge name at the top if available
-    if (edge.name) {
-        html += `<p><strong>Name:</strong> ${escapeHTML(edge.name)}</p>`;
-    }
-
-    if (edge.type) {
-        html += `<p><strong>Type:</strong> ${escapeHTML(edge.type)}</p>`;
-    }
-
-    // Show source and target
-    html += `<p><strong>Source:</strong> ${escapeHTML(edge.source)}</p>`;
-    html += `<p><strong>Target:</strong> ${escapeHTML(edge.target)}</p>`;
-
-    // Show all other attributes
-    const specialKeys = ['id', 'name', 'type', 'source', 'target', 'color', 'description'];
-
-    for (const [key, value] of Object.entries(edge)) {
-        if (!specialKeys.includes(key) && value !== undefined && value !== null) {
-            html += `<p><strong>${escapeHTML(key)}:</strong> ${escapeHTML(value)}</p>`;
-        }
-    }
-
-    // Add description if available
-    if (edge.description) {
-        html += `
-            <hr>
-            <h6>Description</h6>
-            <div class="node-description">${escapeHTML(edge.description)}</div>
-        `;
-    }
-
-    return html;
+    return formatElementDetails(edge, 'edge');
 }
 
 /**

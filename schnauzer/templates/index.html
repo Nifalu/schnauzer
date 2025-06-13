@@ -38,6 +38,7 @@
                                         <li><a class="dropdown-item layout-option active" href="#" data-layout="cose">CoSE (Spring)</a></li>
                                         <li><a class="dropdown-item layout-option" href="#" data-layout="fcose">fCoSE (Fast)</a></li>
                                         <li><a class="dropdown-item layout-option" href="#" data-layout="cola">Cola (Constraint)</a></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="euler">Euler (Live Physics)</a></li>
                                         <li><hr class="dropdown-divider"></li>
                                         <li><h6 class="dropdown-header">Hierarchical</h6></li>
                                         <li><a class="dropdown-item layout-option" href="#" data-layout="breadthfirst">Breadth-First Tree</a></li>
@@ -147,27 +148,42 @@
 
     <!-- Cytoscape.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <script src="https://unpkg.com/cytoscape-euler@1.2.2/cytoscape-euler.js"></script>
 
-    <!-- Layout extensions - try to load them but app will work without them -->
+    <!-- Layout extensions - load in correct dependency order -->
     <script>
-        // Try to load extensions, but don't fail if they're not available
-        const layoutExtensions = [
-            { url: 'https://unpkg.com/layout-base@2.0.1/layout-base.js', name: 'layout-base' },
-            { url: 'https://unpkg.com/cose-base@2.2.0/cose-base.js', name: 'cose-base' },
-            { url: 'https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js', name: 'fcose' },
-            { url: 'https://unpkg.com/webcola@3.4.0/WebCola/cola.min.js', name: 'cola' },
-            { url: 'https://unpkg.com/cytoscape-cola@2.5.1/cytoscape-cola.js', name: 'cytoscape-cola' },
-            { url: 'https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js', name: 'dagre' },
-            { url: 'https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js', name: 'cytoscape-dagre' }
-        ];
+        // Load extensions in the correct order with dependencies
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
 
-        // Load extensions sequentially
-        layoutExtensions.forEach(ext => {
-            const script = document.createElement('script');
-            script.src = ext.url;
-            script.onerror = () => console.warn(`Failed to load ${ext.name}, some layouts may not be available`);
-            document.head.appendChild(script);
-        });
+        // Load in sequence to handle dependencies
+        async function loadExtensions() {
+            try {
+                // Load base dependencies first
+                await loadScript('https://unpkg.com/layout-base@2.0.1/layout-base.js');
+                await loadScript('https://unpkg.com/cose-base@2.2.0/cose-base.js');
+
+                // Then load fcose which depends on the above
+                await loadScript('https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js');
+
+                // Load other extensions
+                await loadScript('https://unpkg.com/webcola@3.4.0/WebCola/cola.min.js');
+                await loadScript('https://unpkg.com/cytoscape-cola@2.5.1/cytoscape-cola.js');
+                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js');
+                await loadScript('https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js');
+            } catch (error) {
+                console.warn('Some layout extensions failed to load:', error);
+            }
+        }
+
+        loadExtensions();
     </script>
 
     <!-- Custom JavaScript for graph visualization (modular structure) -->

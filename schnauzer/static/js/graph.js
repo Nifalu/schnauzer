@@ -355,27 +355,59 @@ function initializeVisualization() {
         });
     }
 
-    // Update graph with new data
     function updateGraph(graphData) {
         if (!cy) {
             cy = initCytoscape();
         }
 
-        // Clear existing elements
-        cy.elements().remove();
-        cy.elements().removeClass('dimmed highlighted');
+        // For Euler, defer the entire update to next tick
+        if (layoutName === 'euler' && currentLayout) {
+            // Stop it first
+            if (currentLayout) {
+                currentLayout.stop();
+                currentLayout = null;
+            }
 
-        // Add new elements
+            // Defer everything to next event loop tick
+            setTimeout(() => {
+                updateGraph(graphData);  // Call ourselves again
+            }, 100);
+            return;
+        }
+
+        // Normal flow for non-Euler or second pass
+        if (currentLayout) {
+            currentLayout.stop();
+            currentLayout = null;
+        }
+
+        updateGraphElements(graphData);
+    }
+
+    // Update graph with new data
+    function updateGraphElements(graphData) {
+        console.log("UpdateGraphElements was called.")
+        // Save current positions
+        const oldPositions = {};
+        console.log("getting old positions")
+        cy.nodes().forEach(node => {
+            oldPositions[node.id()] = node.position();
+        });
+        console.log("removing elements")
+        // Clear and add new elements (like original)
+        cy.elements().remove();
+
+        console.log("going to add elements")
         if (graphData.elements) {
+            console.log("in if")
+            console.log("adding elements")
             cy.add(graphData.elements);
         } else {
+            console.log("in else")
             // Handle old format
             const elements = {
                 nodes: graphData.nodes?.map(node => ({
-                    data: {
-                        id: node.name,
-                        ...node
-                    }
+                    data: { id: node.name, ...node }
                 })) || [],
                 edges: graphData.edges?.map(edge => ({
                     data: {
@@ -386,14 +418,22 @@ function initializeVisualization() {
                     }
                 })) || []
             };
+            console.log("adding elements")
             cy.add(elements);
         }
-
-        // Apply layout
+        console.log("added elements, now restoring positions")
+        // Restore any positions we had
+        cy.nodes().forEach(node => {
+            if (oldPositions[node.id()]) {
+                node.position(oldPositions[node.id()]);
+            }
+        });
+        // Always run layout - it will handle positioned vs unpositioned nodes
+        console.log("Updated Graph, Running Layout now.")
         runLayout();
-
-        // Update stats
+        console.log("Ran the layout, now updating graph stats")
         updateGraphStats();
+        console.log("UpdateGraph Function finished.")
     }
 
     // Get layout options for different layout types
@@ -442,7 +482,7 @@ function initializeVisualization() {
             },
             'breadthfirst': {
                 directed: true,
-                spacingFactor: 1.5,
+                spacingFactor: 1,
                 avoidOverlap: true,
                 circle: false,
                 grid: false,
@@ -454,12 +494,6 @@ function initializeVisualization() {
                 nodeSep: 50,
                 edgeSep: 25,
                 ranker: 'network-simplex'
-            },
-            'klay': {
-                direction: 'DOWN',
-                spacing: 50,
-                layoutHierarchy: true,
-                compactComponents: true
             },
             'circle': {
                 avoidOverlap: true,
@@ -480,7 +514,7 @@ function initializeVisualization() {
                 clockwise: true,
             },
             'concentric': {
-                minNodeSpacing: 50,
+                minNodeSpacing: 80,
                 levelWidth: function() { return 2; },
                 concentric: function(node) {
                     return node.degree();

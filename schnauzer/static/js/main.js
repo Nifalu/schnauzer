@@ -1,8 +1,15 @@
 // main.js - Main application initialization and socket handling for Cytoscape version
 // This file handles socket connection, global state, and initializes the application
 
-// Wait for the DOM to load
-document.addEventListener('DOMContentLoaded', function() {
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeApp);
+} else {
+    // DOM is already loaded, initialize immediately
+    initializeApp();
+}
+
+function initializeApp() {
+    console.log("Initializing app");
     // Initialize app namespace to avoid global variables
     window.SchGraphApp = window.SchGraphApp || {};
     const app = window.SchGraphApp;
@@ -227,6 +234,11 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
+    const fcoseOption = document.querySelector('.layout-option[data-layout="fcose"]');
+    if (fcoseOption) {
+        fcoseOption.classList.add('active');
+    }
+
     // Show status message with optional auto-hide
     function showStatus(message, type, duration = 0) {
         const statusEl = app.elements.statusMessage;
@@ -243,4 +255,4 @@ document.addEventListener('DOMContentLoaded', function() {
             }, duration);
         }
     }
-});
+};

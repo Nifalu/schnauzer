@@ -109,19 +109,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Force controls panel (shown only for force-directed layouts) -->
-                <div class="card mb-4" id="force-controls">
-                    <div class="card-header">
-                        <h5 class="mb-0">Layout Controls</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label for="link-slider" class="form-label">Link Distance: <span id="link-value">200</span></label>
-                            <input type="range" class="form-range" id="link-slider" min="50" max="400" step="10" value="200">
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -141,48 +128,72 @@
 
     <!-- Layout extensions - load in correct dependency order -->
     <script>
-        // Load extensions in the correct order with dependencies
-        function loadScript(src) {
-            return new Promise((resolve, reject) => {
-                const script = document.createElement('script');
-                script.src = src;
-                script.onload = resolve;
-                script.onerror = reject;
-                document.head.appendChild(script);
-            });
-        }
-
-        // Load in sequence to handle dependencies
-        async function loadExtensions() {
-            try {
-                // Load base dependencies first
-                await loadScript('https://unpkg.com/layout-base@2.0.1/layout-base.js');
-                await loadScript('https://unpkg.com/cose-base@2.2.0/cose-base.js');
-
-                // Then load fcose which depends on the above
-                await loadScript('https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js');
-
-                // Load other extensions
-                await loadScript('https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js');
-                await loadScript('https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js');
-            } catch (error) {
-                console.warn('Some layout extensions failed to load:', error);
+        // Create a promise that resolves when extensions are loaded
+        window.extensionsLoaded = new Promise((resolve) => {
+            // Load extensions in the correct order with dependencies
+            function loadScript(src) {
+                return new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
             }
-        }
 
-        loadExtensions();
+            // Load in sequence to handle dependencies
+            async function loadExtensions() {
+                try {
+                    // Load base dependencies first
+                    await loadScript('https://unpkg.com/layout-base@2.0.1/layout-base.js');
+                    await loadScript('https://unpkg.com/cose-base@2.2.0/cose-base.js');
+
+                    // Then load fcose which depends on the above
+                    await loadScript('https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js');
+
+                    // Load other extensions
+                    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js');
+                    await loadScript('https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js');
+
+                    console.log('All layout extensions loaded successfully');
+                    resolve();
+                } catch (error) {
+                    console.warn('Some layout extensions failed to load:', error);
+                    resolve(); // Resolve anyway to not block the app
+                }
+            }
+
+            loadExtensions();
+        });
     </script>
 
     <!-- Custom JavaScript for graph visualization (modular structure) -->
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
     <script src="{{ url_for('static', filename='js/graph.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ui-controls.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     <!-- Pass title to JavaScript -->
     <script>
         // Store the graph title for use in JavaScript
         window.graphTitle = "{{ title }}";
+
+        window.extensionsLoaded.then(() => {
+            console.log("Extensions loaded, now loading main.js");
+            // Now load main.js which will initialize everything
+            const script = document.createElement('script');
+            script.src = "{{ url_for('static', filename='js/main.js') }}";
+            document.body.appendChild(script);
+
+            script.onload = () => {
+                console.log("main.js loaded successfully");
+            };
+
+            script.onerror = (err) => {
+                console.error("Failed to load main.js:", err);
+            };
+        }).catch(err => {
+            console.error("Extensions loading failed:", err);
+        });
     </script>
 </body>
 </html>

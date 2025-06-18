@@ -4,7 +4,7 @@ function initializeVisualization() {
     const app = window.SchGraphApp;
     let cy; // Cytoscape instance
     let currentLayout; // Current layout instance
-    let layoutName = 'cose'; // Default to built-in cose layout
+    let layoutName = 'fcose'; // Default to built-in cose layout
 
     let currentForces = {
         springLength: 200,
@@ -425,7 +425,7 @@ function initializeVisualization() {
                 springCoeff: edge => 0.0001,  // Even lower for gentler springs
                 mass: node => 1,  // Lower mass for more responsiveness
                 gravity: -5,  // Gentle gravity
-                pull: 0,  // Gentle centering force
+                pull: 0.0005,  // Gentle centering force
                 theta: 0.8,
                 dragCoeff: 0.2,  // Lower drag for smoother movement
                 movementThreshold: 1,  // Standard threshold

@@ -30,17 +30,21 @@ function initializeUIControls() {
                 <h5 class="mb-0">Layout Controls</h5>
             </div>
             <div class="card-body">
-                <div class="mb-3">
-                    <label for="charge-slider" class="form-label">Repulsion Force: <span id="charge-value">-1800</span></label>
-                    <input type="range" class="form-range" id="charge-slider" min="-3000" max="-500" step="100" value="-1800">
+                <div class="mb-3" id="spring-length-control">
+                    <label for="spring-length-slider" class="form-label">Spring Length: <span id="spring-length-value">200</span></label>
+                    <input type="range" class="form-range" id="spring-length-slider" min="50" max="400" step="10" value="200">
                 </div>
-                <div class="mb-3">
-                    <label for="link-slider" class="form-label">Link Distance: <span id="link-value">200</span></label>
-                    <input type="range" class="form-range" id="link-slider" min="50" max="400" step="10" value="200">
+                <div class="mb-3" id="spring-strength-control" style="display: none;">
+                    <label for="spring-strength-slider" class="form-label">Spring Strength: <span id="spring-strength-value">0.0001</span></label>
+                    <input type="range" class="form-range" id="spring-strength-slider" min="0.00001" max="0.001" step="0.00001" value="0.0001">
                 </div>
-                <div class="mb-3">
-                    <label for="collision-slider" class="form-label">Collision Strength: <span id="collision-value">1.0</span></label>
-                    <input type="range" class="form-range" id="collision-slider" min="0.1" max="1.5" step="0.1" value="1.0">
+                <div class="mb-3" id="mass-control" style="display: none;">
+                    <label for="mass-slider" class="form-label">Node Mass: <span id="mass-value">4</span></label>
+                    <input type="range" class="form-range" id="mass-slider" min="1" max="20" step="1" value="4">
+                </div>
+                <div class="mb-3" id="gravity-control" style="display: none;">
+                    <label for="gravity-slider" class="form-label">Gravity: <span id="gravity-value">-0.8</span></label>
+                    <input type="range" class="form-range" id="gravity-slider" min="-5" max="5" step="0.1" value="-0.8">
                 </div>
             </div>
         `;
@@ -71,12 +75,41 @@ function initializeUIControls() {
      * Set up force control sliders
      */
     function setupForceControls() {
-        const linkSlider = document.getElementById('link-slider');
+        // Spring length slider
+        const springLengthSlider = document.getElementById('spring-length-slider');
+        if (springLengthSlider) {
+            springLengthSlider.addEventListener('input', debounce(() => {
+                updateSliderValue('spring-length-value', springLengthSlider.value);
+                updateForceParameter('springLength', parseInt(springLengthSlider.value));
+            }, 50));
+        }
 
-        if (linkSlider) {
-            linkSlider.addEventListener('input', debounce(() => {
-                updateSliderValue('link-value', linkSlider.value);
-                updateForceParameter('linkDistance', parseInt(linkSlider.value));
+        // Spring strength slider
+        const springStrengthSlider = document.getElementById('spring-strength-slider');
+        if (springStrengthSlider) {
+            springStrengthSlider.addEventListener('input', debounce(() => {
+                const value = parseFloat(springStrengthSlider.value);
+                updateSliderValue('spring-strength-value', value.toFixed(5));
+                updateForceParameter('springCoeff', value);
+            }, 50));
+        }
+
+        // Mass slider
+        const massSlider = document.getElementById('mass-slider');
+        if (massSlider) {
+            massSlider.addEventListener('input', debounce(() => {
+                updateSliderValue('mass-value', massSlider.value);
+                updateForceParameter('mass', parseInt(massSlider.value));
+            }, 50));
+        }
+
+        // Gravity slider
+        const gravitySlider = document.getElementById('gravity-slider');
+        if (gravitySlider) {
+            gravitySlider.addEventListener('input', debounce(() => {
+                const value = parseFloat(gravitySlider.value);
+                updateSliderValue('gravity-value', value.toFixed(1));
+                updateForceParameter('gravity', value);
             }, 50));
         }
     }
@@ -171,10 +204,23 @@ function initializeUIControls() {
         if (forceLayouts.includes(layoutName)) {
             forceControls.style.display = 'block';
 
-            // Update labels based on layout type
-            const chargeLabel = document.querySelector('label[for="charge-slider"]');
-            const linkLabel = document.querySelector('label[for="link-slider"]');
-            updateLayoutSpecificControls(layoutName);
+            // Show/hide controls based on layout type
+            const springLengthControl = document.getElementById('spring-length-control');
+            const springStrengthControl = document.getElementById('spring-strength-control');
+            const massControl = document.getElementById('mass-control');
+            const gravityControl = document.getElementById('gravity-control');
+
+            if (layoutName === 'euler') {
+                // Show all controls for Euler
+                if (springStrengthControl) springStrengthControl.style.display = 'block';
+                if (massControl) massControl.style.display = 'block';
+                if (gravityControl) gravityControl.style.display = 'block';
+            } else {
+                // Hide Euler-specific controls for other layouts
+                if (springStrengthControl) springStrengthControl.style.display = 'none';
+                if (massControl) massControl.style.display = 'none';
+                if (gravityControl) gravityControl.style.display = 'none';
+            }
         } else {
             forceControls.style.display = 'none';
         }

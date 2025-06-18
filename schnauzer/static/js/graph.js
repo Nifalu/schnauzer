@@ -7,7 +7,10 @@ function initializeVisualization() {
     let layoutName = 'cose'; // Default to built-in cose layout
 
     let currentForces = {
-        linkDistance: null
+        springLength: 200,
+        springCoeff: 0.0001,
+        mass: 4,
+        gravity: -0.8
     };
 
     // Initialize Cytoscape
@@ -153,6 +156,7 @@ function initializeVisualization() {
     function setupEventHandlers() {
         const tooltip = document.querySelector(".graph-tooltip");
         let tooltipTimeout;
+        let hoveredElement = null; // Track what element is currently hovered
 
         // Helper function to show tooltip
         function showTooltip(html, x, y) {
@@ -165,6 +169,7 @@ function initializeVisualization() {
 
         // Helper function to hide tooltip
         function hideTooltip() {
+            hoveredElement = null;
             tooltipTimeout = setTimeout(() => {
                 tooltip.style.opacity = "0";
             }, 100);
@@ -224,9 +229,9 @@ function initializeVisualization() {
         cy.on('mouseover', 'node', function(evt) {
             const node = evt.target;
             const data = node.data();
-            const renderedPosition = node.renderedPosition();
             const container = cy.container();
             const containerRect = container.getBoundingClientRect();
+            hoveredElement = node;
 
             // Build tooltip content with truncated name
             const fullName = data.name || "Node";
@@ -288,8 +293,8 @@ function initializeVisualization() {
             // Position and show tooltip
             showTooltip(
                 html,
-                containerRect.left + renderedPosition.x + 15,
-                containerRect.top + renderedPosition.y - 30
+                evt.renderedPosition.x + containerRect.left + 15,
+                evt.renderedPosition.y + containerRect.top - 30
             );
         });
 
@@ -297,9 +302,8 @@ function initializeVisualization() {
         cy.on('mouseover', 'edge', function(evt) {
             const edge = evt.target;
             const data = edge.data();
+            hoveredElement = edge;
 
-            // Get the rendered midpoint position (this is in screen coordinates)
-            const midpoint = edge.renderedMidpoint();
             const container = cy.container();
             const containerRect = container.getBoundingClientRect();
 
@@ -311,9 +315,43 @@ function initializeVisualization() {
             // Position and show tooltip (using rendered coordinates)
             showTooltip(
                 html,
-                containerRect.left + midpoint.x + 15,
-                containerRect.top + midpoint.y - 30
+                evt.renderedPosition.x + containerRect.left + 15,
+                evt.renderedPosition.y + containerRect.top - 30
             );
+        });
+
+        // Mouse move - update tooltip position when hovering
+        cy.on('mousemove', function(evt) {
+            if (hoveredElement && !app.state.isMouseDown && tooltip.style.opacity !== "0") {
+                const container = cy.container();
+                const containerRect = container.getBoundingClientRect();
+
+                // Update tooltip position to follow cursor
+                tooltip.style.left = (evt.renderedPosition.x + containerRect.left + 15) + "px";
+                tooltip.style.top = (evt.renderedPosition.y + containerRect.top - 30) + "px";
+            }
+        });
+
+        // Track mouse down/up state to hide tooltip when dragging
+        cy.on('mousedown', function(evt) {
+            app.state.isMouseDown = true;
+            if (hoveredElement) {
+                hideTooltip();
+            }
+        });
+
+        cy.on('mouseup', function(evt) {
+            app.state.isMouseDown = false;
+        });
+
+
+        cy.on('mouseout', 'node', function(evt) {
+            hideTooltip();
+        });
+
+        // Hide tooltip when mouse leaves edges
+        cy.on('mouseout', 'edge', function(evt) {
+            hideTooltip();
         });
     }
 
@@ -384,18 +422,18 @@ function initializeVisualization() {
             'euler': {
                 name: 'euler',
                 springLength: edge => 200,
-                springCoeff: edge => 0.0002,  // Much lower
-                mass: node => 8,  // Higher mass for stability
-                gravity: -0.3,  // Much lower
-                pull: 0.0002,  // Much lower
+                springCoeff: edge => 0.0001,  // Even lower for gentler springs
+                mass: node => 1,  // Lower mass for more responsiveness
+                gravity: -5,  // Gentle gravity
+                pull: 0,  // Gentle centering force
                 theta: 0.8,
-                dragCoeff: 0.05,  // Higher drag
-                movementThreshold: 0.5,  // Lower threshold
-                timeStep: 10,  // Smaller timestep
-                refresh: 20,
+                dragCoeff: 0.2,  // Lower drag for smoother movement
+                movementThreshold: 1,  // Standard threshold
+                timeStep: 20,  // Standard timestep
+                refresh: 10,  // Faster refresh
                 animate: true,
                 animationDuration: undefined,
-                animationThreshold: 0.2,  // Lower threshold
+                animationThreshold: 0.5,
                 ungrabifyWhileSimulating: false,
                 fit: true,
                 padding: 30,
@@ -503,53 +541,76 @@ function initializeVisualization() {
             return;
         }
 
-        // Only update if link distance changed
-        if (forces.linkDistance === undefined || forces.linkDistance === currentForces.linkDistance) {
+        // Update current forces
+        Object.assign(currentForces, forces);
+
+        // For Euler, smoothly transition to new parameters
+        if (layoutName === 'euler') {
+            if (currentLayout) {
+                currentLayout.stop();
+            }
+
+            // Get current node positions
+            const currentPositions = {};
+            cy.nodes().forEach(node => {
+                currentPositions[node.id()] = {
+                    x: node.position('x'),
+                    y: node.position('y')
+                };
+            });
+
+            const options = getLayoutOptions('euler');
+
+            // Apply all current force values
+            options.springLength = edge => currentForces.springLength;
+            options.springCoeff = edge => currentForces.springCoeff;
+            options.mass = node => currentForces.mass;
+            options.gravity = currentForces.gravity;
+
+            options.randomize = false; // Don't randomize
+            options.positions = node => currentPositions[node.id()]; // Start from current positions
+            options.fit = false; // Don't re-fit
+            options.animate = true;
+            options.animationDuration = undefined; // Let it run continuously
+            options.refresh = 10; // Faster refresh for smoother updates
+            options.animationThreshold = 0.5; // Higher threshold for smoother animation
+
+            currentLayout = cy.layout(options);
+            currentLayout.run();
             return;
         }
 
-        currentForces.linkDistance = forces.linkDistance;
+        // For fCoSE, only handle spring length
+        if (layoutName === 'fcose' && forces.springLength !== undefined) {
+            const currentPositions = {};
+            cy.nodes().forEach(node => {
+                currentPositions[node.id()] = {
+                    x: node.position('x'),
+                    y: node.position('y')
+                };
+            });
 
-        // Special handling for Euler - it's a continuous simulation
-        if (layoutName === 'euler' && currentLayout) {
-            try {
-                currentLayout.options.springLength = forces.linkDistance;
-                return;
-            } catch (e) {
-                console.log('Euler parameter update failed, restarting layout');
-            }
-        }
+            const options = getLayoutOptions(layoutName);
+            options.idealEdgeLength = forces.springLength;
 
-        // For fCoSE, do incremental update
-        const currentPositions = {};
-        cy.nodes().forEach(node => {
-            currentPositions[node.id()] = {
-                x: node.position('x'),
-                y: node.position('y')
+            options.randomize = false;
+            options.positions = node => {
+                const pos = currentPositions[node.id()];
+                return pos ? { x: pos.x, y: pos.y } : undefined;
             };
-        });
+            options.fit = false;
+            options.animate = true;
+            options.animationDuration = 300;
+            options.animationEasing = 'ease-out';
+            options.numIter = 250;
 
-        const options = getLayoutOptions(layoutName);
-        options.idealEdgeLength = forces.linkDistance;
+            if (currentLayout) {
+                currentLayout.stop();
+            }
 
-        // Start from current positions and animate smoothly
-        options.randomize = false;
-        options.positions = node => {
-            const pos = currentPositions[node.id()];
-            return pos ? { x: pos.x, y: pos.y } : undefined;
-        };
-        options.fit = false;
-        options.animate = true;
-        options.animationDuration = 300;
-        options.animationEasing = 'ease-out';
-        options.numIter = 250; // Reduced for incremental updates
-
-        if (currentLayout) {
-            currentLayout.stop();
+            currentLayout = cy.layout(options);
+            currentLayout.run();
         }
-
-        currentLayout = cy.layout(options);
-        currentLayout.run();
     }
 
     // Toggle physics on/off

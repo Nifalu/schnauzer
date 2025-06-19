@@ -8,6 +8,9 @@
     <!-- Bootstrap CSS from CDN -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
 
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
@@ -23,14 +26,33 @@
                         <div class="graph-controls">
                             <div class="btn-group">
                                 <button id="reset-zoom" class="btn btn-sm btn-outline-secondary">Reset View</button>
-                                <button id="toggle-physics" class="btn btn-sm btn-outline-secondary">Freeze Nodes</button>
-                                <button id="toggle-layout" class="btn btn-sm btn-outline-primary">Tree Layout</button>
+
+                                <!-- Layout dropdown -->
+                                <div class="dropdown d-inline-block">
+                                    <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" id="layoutDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <i class="bi bi-diagram-3"></i> Layout: <span id="current-layout">fCose</span>
+                                    </button>
+                                    <ul class="dropdown-menu" aria-labelledby="layoutDropdown">
+                                        <li><h6 class="dropdown-header">Physics</h6></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="fcose">fCose</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header">Hierarchical</h6></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="breadthfirst">Breadth-First Tree</a></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="dagre">Dagre (DAG)</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li><h6 class="dropdown-header">Other</h6></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="circle">Circle</a></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="concentric">Concentric</a></li>
+                                        <li><a class="dropdown-item layout-option" href="#" data-layout="grid">Grid</a></li>
+                                    </ul>
+                                </div>
+
                                 <button id="export-graph" class="btn btn-sm btn-outline-secondary">
                                     <i class="bi bi-download"></i> Export
                                 </button>
                             </div>
                         </div>
-                        <!-- D3 will render the SVG here -->
+                        <!-- Cytoscape will render here -->
                     </div>
                 </div>
 
@@ -95,28 +117,80 @@
     <!-- Socket.IO from CDN -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-    <!-- D3.js from CDN -->
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-
-    <!-- Dagre -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
-
     <!-- Bootstrap JS Bundle with Popper from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <!-- Cytoscape.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+
+    <!-- Layout extensions - load in correct dependency order -->
+    <script>
+        // Create a promise that resolves when extensions are loaded
+        window.extensionsLoaded = new Promise((resolve) => {
+            // Load extensions in the correct order with dependencies
+            function loadScript(src) {
+                return new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = src;
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
+
+            // Load in sequence to handle dependencies
+            async function loadExtensions() {
+                try {
+                    // Load base dependencies first
+                    await loadScript('https://unpkg.com/layout-base@2.0.1/layout-base.js');
+                    await loadScript('https://unpkg.com/cose-base@2.2.0/cose-base.js');
+
+                    // Then load fcose which depends on the above
+                    await loadScript('https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js');
+
+                    // Load other extensions
+                    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js');
+                    await loadScript('https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js');
+
+                    console.log('All layout extensions loaded successfully');
+                    resolve();
+                } catch (error) {
+                    console.warn('Some layout extensions failed to load:', error);
+                    resolve(); // Resolve anyway to not block the app
+                }
+            }
+
+            loadExtensions();
+        });
+    </script>
 
     <!-- Custom JavaScript for graph visualization (modular structure) -->
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
     <script src="{{ url_for('static', filename='js/graph.js') }}"></script>
     <script src="{{ url_for('static', filename='js/ui-controls.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 
     <!-- Pass title to JavaScript -->
     <script>
         // Store the graph title for use in JavaScript
         window.graphTitle = "{{ title }}";
+
+        window.extensionsLoaded.then(() => {
+            console.log("Extensions loaded, now loading main.js");
+            // Now load main.js which will initialize everything
+            const script = document.createElement('script');
+            script.src = "{{ url_for('static', filename='js/main.js') }}";
+            document.body.appendChild(script);
+
+            script.onload = () => {
+                console.log("main.js loaded successfully");
+            };
+
+            script.onerror = (err) => {
+                console.error("Failed to load main.js:", err);
+            };
+        }).catch(err => {
+            console.error("Extensions loading failed:", err);
+        });
     </script>
 </body>
 </html>

@@ -132,6 +132,10 @@ class Server:
 
     def _on_graph_update(self):
         """Callback for when the graph is updated from a backend client."""
+        print("="*50)
+        print("About to emit graph_update with following data:")
+        print(json.dumps(self.current_graph, indent=2))
+        print("="*50)
         self.socketio.emit('graph_update', self.current_graph)
         print("Broadcasted updated graph to web clients")
 

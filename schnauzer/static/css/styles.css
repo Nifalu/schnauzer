@@ -1,70 +1,37 @@
-/* Custom styles to extend Bootstrap for the network visualization */
+/* Custom styles for Cytoscape.js network visualization */
 
 /* Graph container styling */
 #graph-container {
     width: 100%;
-    height: 800px;
+    height: calc(100vh - 200px);
     position: relative;
     overflow: hidden;
     background: #f9f9f9;
+    opacity: 1;
 }
 
-/* Node styling */
-.node {
-    cursor: pointer;
+/* Cytoscape container takes full space */
+#graph-container > div {
+    width: 100%;
+    height: 100%;
 }
 
-.node:hover rect {
-    transform: scale(1.05);
-    transition: transform 0.2s ease;
+/* Remove any default transparency */
+.cytoscape-container {
+    opacity: 1;
 }
 
-/* Additional styles for node properties */
-.node-properties {
+/* Node details panel */
+#node-details {
+    transition: all 0.3s ease;
+}
+
+#node-details-content {
     max-height: 500px;
     overflow-y: auto;
 }
 
-.node-properties .collapse {
-    transition: all 0.2s ease;
-}
-
-/* Text styling for nodes */
-.node text {
-    font-size: 12px;
-    font-weight: bold;
-    pointer-events: none;
-}
-
-/* Styles for JSON syntax highlighting */
-.node-properties .text-primary {
-    color: #6610f2 !important;  /* strings */
-}
-
-.node-properties .text-dark {
-    font-weight: bold;  /* keys */
-}
-
-.node-properties .text-success {
-    color: #198754 !important;  /* booleans */
-}
-
-.node-properties .text-info {
-    color: #0dcaf0 !important;  /* numbers */
-}
-
-.node-properties .text-danger {
-    color: #dc3545 !important;  /* null values */
-}
-
-.link {
-    fill: none !important;  /* Force no fill */
-}
-
-path.link {
-    fill: none !important;  /* Extra specific */
-}
-
+/* Graph tooltip styling */
 .graph-tooltip {
     position: absolute;
     max-width: 300px;
@@ -77,9 +44,7 @@ path.link {
     font-size: 14px;
     z-index: 1000;
     opacity: 0;
-    transition: opacity 0.01s ease-in-out;
-    will-change: opacity, transform;
-    transform: translateZ(0);
+    transition: opacity 0.2s ease-in-out;
 }
 
 .graph-tooltip h4 {
@@ -102,22 +67,6 @@ path.link {
     color: #555;
 }
 
-/* Make tooltip more visible on different backgrounds */
-.graph-tooltip::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    border-radius: 6px;
-    pointer-events: none;
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
-    z-index: -1;
-}
-
-
-
 /* Graph controls */
 .graph-controls {
     position: absolute;
@@ -127,27 +76,57 @@ path.link {
     padding: 10px;
     border-radius: 5px;
     z-index: 100;
+    width: auto !important;
+    height: auto !important;
+    max-width: fit-content;
+    max-height: fit-content;
+}
+
+/* Layout dropdown styling */
+.graph-controls .dropdown {
+    display: inline-block;
+}
+
+.dropdown-menu {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.dropdown-header {
+    font-weight: bold;
+    color: #6c757d;
+    font-size: 0.875rem;
+    padding: 0.5rem 1rem;
+}
+
+.layout-option {
+    cursor: pointer;
+}
+
+.layout-option:hover {
+    background-color: #f8f9fa;
+}
+
+.layout-option.active {
+    background-color: #0d6efd;
+    color: white;
+}
+
+/* Disabled button state */
+.btn.disabled,
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Force controls visibility transition */
+#force-controls {
+    transition: opacity 0.3s ease;
 }
 
 /* Animation for status messages */
 .status-message {
     transition: opacity 0.5s ease-in-out;
-}
-
-/* Canvas sizing for diagram */
-svg {
-    width: 100%;
-    height: 100%;
-}
-
-/* Node details panel */
-#node-details {
-    transition: all 0.3s ease;
-}
-
-#node-details-content {
-    max-height: 500px;
-    overflow-y: auto;
 }
 
 /* Graph statistics styling */
@@ -161,17 +140,44 @@ svg {
     align-items: center;
 }
 
-/* Make the legend more compact */
-.graph-legend .list-group-item {
-    padding-top: 0.25rem;
-    padding-bottom: 0.25rem;
+/* Search box styling */
+#search-nodes {
+    font-size: 14px;
 }
 
-.graph-legend kbd {
-    font-size: 0.75rem;
-    padding: 0.1rem 0.3rem;
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
-    border-radius: 0.2rem;
-    box-shadow: inset 0 -1px 0 rgba(0,0,0,.25);
+.input-group .btn-outline-secondary {
+    border-color: #ced4da;
+}
+
+/* Node properties in details panel */
+.node-properties {
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+.node-properties .collapse {
+    transition: all 0.2s ease;
+}
+
+/* Additional styles for property formatting */
+.node-description {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Ensure nodes and edges start fully visible */
+.node, .edge {
+    opacity: 1;
+}
+
+/* Search highlighting - only apply when classes are present */
+#graph-container .dimmed {
+    opacity: 0.2 !important;
+    transition: opacity 0.2s ease;
+}
+
+#graph-container .highlighted {
+    opacity: 1 !important;
+    z-index: 999;
+    transition: opacity 0.2s ease;
 }

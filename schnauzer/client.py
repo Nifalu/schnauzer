@@ -1,10 +1,9 @@
 """Client module for connecting to the visualization server using ZeroMQ.
 
 This module provides a client interface to send NetworkX graph data to the
-Schnauzer visualization server for interactive rendering.
+Schnauzer visualization server for interactive rendering with Cytoscape.js.
 """
-import \
-    networkx as nx
+import networkx as nx
 import zmq
 import json
 import atexit
@@ -80,7 +79,7 @@ class VisualizationClient:
                    type_color_map: dict[str, str]=None):
         """Send networkx graph data to the visualization server.
 
-        This method converts a NetworkX graph to a JSON format suitable for
+        This method converts a NetworkX graph to Cytoscape.js JSON format suitable for
         visualization and sends it to the connected server.
 
         Args:
@@ -98,7 +97,7 @@ class VisualizationClient:
             if not success:
                 return False
 
-        # Convert networkx graph to JSON-serializable format
+        # Convert networkx graph to Cytoscape JSON format
         graph_data = self._convert_graph_to_json(
             graph,
             node_labels,
@@ -142,7 +141,7 @@ class VisualizationClient:
                                node_labels: list[str] = None,
                                edge_labels: list[str] = None,
                                type_color_map: dict[str, str] = None):
-        """Convert a NetworkX graph to a JSON-serializable format.
+        """Convert a NetworkX graph to Cytoscape.js JSON format.
 
         Args:
             graph (networkx.Graph): The graph to convert
@@ -151,68 +150,70 @@ class VisualizationClient:
             type_color_map (dict[str, str], optional): Mapping of node/edge types to colors
 
         Returns:
-            dict: JSON-serializable structure representing the graph
+            dict: JSON-serializable structure representing the graph in Cytoscape format
         """
-        # Basic structure
+        # Cytoscape expects 'elements' with 'nodes' and 'edges'
         json_data = {
-            'nodes': [],
-            'edges': []
+            'elements': {
+                'nodes': [],
+                'edges': []
+            }
         }
 
-        # Helper function to make values JSON serializable
+        # Helper function remains the same
         def make_serializable(any_value):
-            """Convert any Python value to a JSON-serializable format."""
             if not any_value:
                 return "None"
-
-            # Return atomic values
             if isinstance(any_value, (str, int, float, bool)):
                 return any_value
-
-            # Handle structured data
             elif hasattr(any_value, 'to_dict') and callable(any_value.to_dict):
                 result = {}
                 for k, v in any_value.to_dict():
                     result[k] = make_serializable(v)
                 return result
-
             elif hasattr(any_value, '__dict__'):
-                # Extract meaningful attributes for better representation
                 result = {}
                 for k, v in any_value.__dict__.items():
-                    if not k.startswith('_'):  # Skip private attributes
+                    if not k.startswith('_'):
                         result[k] = make_serializable(v)
                 return result
-
-            # Default fallback
             return str(any_value)
 
-        # Track relationships between nodes for parent/child references
-        node_map = {}
-
         # Process nodes
-        for node, data in graph.nodes(data=True):
-            labels = {}
-            for key, value in data.items():
-                if key in ['name', 'type']:
-                    continue  # Store these separately
-                if node_labels and key in node_labels:  # Add selected labels only
-                    labels[key] = make_serializable(value)
-                else:  # Add all labels
-                    labels[key] = make_serializable(value)
+        node_id_map = {}  # Map original node to string ID
 
+        for node, data in graph.nodes(data=True):
+            node_id = data.get('name', str(node))
+            node_id_map[node] = node_id
+
+            # Build node data
             node_data = {
-                'name': data.get('name', data.get('label', str(node))),  # Try to find a name or label
-                'type': data.get('type', 'not set'),
-                'labels': labels,
-                'parents': [],
-                'children': []
+                'id': node_id,  # Cytoscape requires 'id'
+                'name': data.get('name', data.get('label', str(node))),
+                'type': data.get('type', 'not set')
             }
-            node_map[str(node)] = node_data
-            json_data['nodes'].append(node_data)
+
+            # Add all other attributes
+            for key, value in data.items():
+                if key not in ['name', 'type', 'label']:
+                    if not node_labels or key in node_labels:
+                        node_data[key] = make_serializable(value)
+
+            # Apply color if type mapping provided
+            if type_color_map and node_data['type'] in type_color_map:
+                node_data['color'] = type_color_map[node_data['type']]
+            else:
+                # Default coloring
+                node_data['color'] = '#999'
+
+            # Add to elements
+            json_data['elements']['nodes'].append({
+                'data': node_data
+            })
 
         # Process edges
         is_multigraph = isinstance(graph, (nx.MultiGraph, nx.MultiDiGraph))
+        edge_count = {}  # Track multiple edges between same nodes
 
         if is_multigraph:
             edge_iterator = graph.edges(data=True, keys=True)
@@ -220,71 +221,43 @@ class VisualizationClient:
             edge_iterator = ((u, v, 0, d) for u, v, d in graph.edges(data=True))
 
         for source, target, edge_key, data in edge_iterator:
-            source_id = str(source)
-            target_id = str(target)
+            source_id = node_id_map[source]
+            target_id = node_id_map[target]
 
-            # Add relationship data
-            if source_id in node_map and target_id in node_map:
-                # Add target to source's children
-                source_node = node_map[source_id]
-                target_node = node_map[target_id]
+            # Create unique edge ID
+            edge_pair = f"{source_id}_{target_id}"
+            if edge_pair in edge_count:
+                edge_count[edge_pair] += 1
+                edge_id = f"{edge_pair}_{edge_count[edge_pair]}"
+            else:
+                edge_count[edge_pair] = 0
+                edge_id = edge_pair
 
-                source_node['children'].append({
-                    'id': target_id,
-                    'name': target_node['name']
-                })
-
-                # Add source to target's parents
-                target_node['parents'].append({
-                    'id': source_id,
-                    'name': source_node['name']
-                })
-
-            # Process edge labels
-            labels = {}
-            for attr_key, value in data.items():
-                if attr_key in ['name', 'type']:
-                    continue  # Store these separately
-                if edge_labels and attr_key in edge_labels:  # Add selected labels only
-                    labels[attr_key] = make_serializable(value)
-                else:  # Add all labels
-                    labels[attr_key] = make_serializable(value)
-
-            link_data = {
-                'name': data.get('name', data.get('label')),
-                'type': data.get('type', 'not set'),
-                'source': str(source),
-                'target': str(target),
-                'labels': labels
+            # Build edge data
+            edge_data = {
+                'id': edge_id,
+                'source': source_id,
+                'target': target_id,
+                'name': data.get('name', data.get('label', '')),
+                'type': data.get('type', 'not set')
             }
 
-            json_data['edges'].append(link_data)
+            # Add all other attributes
+            for key, value in data.items():
+                if key not in ['name', 'type', 'label']:
+                    if not edge_labels or key in edge_labels:
+                        edge_data[key] = make_serializable(value)
 
-        # Apply custom color mapping if provided
-        if type_color_map:
-            for node_data in json_data['nodes']:
-                node_type = node_data.get('type')
-                if node_type:
-                    node_data['color'] = type_color_map.get(node_type, '#a3a3a3')  # Light gray default
-            for edge_data in json_data['edges']:
-                edge_type = edge_data.get('type')
-                if edge_type:
-                    edge_data['color'] = type_color_map.get(edge_type, '#a3a3a3')  # Light gray default
+            # Apply color if type mapping provided
+            if type_color_map and edge_data['type'] in type_color_map:
+                edge_data['color'] = type_color_map[edge_data['type']]
+            else:
+                edge_data['color'] = '#999'
 
-        else:
-            # Determine node types based on connections
-            for node_data in json_data['nodes']:
-                if not node_data['parents'] and node_data['children']:
-                    node_data['type'] = 'root'
-                    node_data['color'] = '#FF0000'  # Red for root nodes
-                elif node_data['parents'] and not node_data['children']:
-                    node_data['type'] = 'leaf'
-                    node_data['color'] = '#00FF00'  # Green for leaf nodes
-                else:
-                    node_data['type'] = 'normal'
-                    node_data['color'] = '#0000FF'  # Blue for regular nodes
-            for edge in json_data['edges']:
-                edge['type'] = 'normal'
-                edge['color'] = "#a3a3a3"  # Light gray for edges
+            # Add to elements
+            json_data['elements']['edges'].append({
+                'data': edge_data,
+                'classes': 'multiple' if edge_count[edge_pair] > 0 else ''
+            })
 
         return json_data

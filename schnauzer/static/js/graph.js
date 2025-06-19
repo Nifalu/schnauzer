@@ -3,8 +3,11 @@
 function initializeVisualization() {
     const app = window.SchGraphApp;
     let cy; // Cytoscape instance
-    let currentLayout; // Current layout instance
-    let layoutName = 'fcose'; // Default to built-in cose layout
+
+    let layoutState = {
+        name: 'fcose',  // Default layout
+        stop: null      // Only store the stop function
+    };
 
     let currentForces = {
         springLength: 200,
@@ -12,6 +15,40 @@ function initializeVisualization() {
         mass: 4,
         gravity: -0.8
     };
+
+    // Helper function to format labels with line breaks
+    function formatLabel(name) {
+        if (!name) return '';
+
+        if (name.length <= 16) {
+            return name;
+        } else {
+            // For names longer than 16 chars
+            let processedName = name;
+            if (name.length > 32) {
+                processedName = name.substring(0, 32);
+            }
+
+            // Split into two lines at the middle
+            const midPoint = Math.floor(processedName.length / 2);
+            // Try to find a good break point (space, dash, underscore)
+            let breakPoint = midPoint;
+            for (let i = midPoint; i >= Math.max(0, midPoint - 8); i--) {
+                if (processedName[i] === ' ' || processedName[i] === '-' || processedName[i] === '_') {
+                    breakPoint = i;
+                    break;
+                }
+            }
+
+            if (breakPoint === midPoint) {
+                // No good break point found, just split at middle
+                return processedName.substring(0, midPoint) + '\n' + processedName.substring(midPoint);
+            } else {
+                // Split at the break point
+                return processedName.substring(0, breakPoint) + '\n' + processedName.substring(breakPoint + 1);
+            }
+        }
+    }
 
     // Initialize Cytoscape
     function initCytoscape() {
@@ -25,35 +62,7 @@ function initializeVisualization() {
                     style: {
                         'background-color': 'data(color)',
                         'label': function(ele) {
-                            const name = ele.data('name') || '';
-                            if (name.length <= 16) {
-                                return name;
-                            } else {
-                                // For names longer than 16 chars
-                                let processedName = name;
-                                if (name.length > 32) {
-                                    processedName = name.substring(0, 32);
-                                }
-
-                                // Split into two lines at the middle
-                                const midPoint = Math.floor(processedName.length / 2);
-                                // Try to find a good break point (space, dash, underscore)
-                                let breakPoint = midPoint;
-                                for (let i = midPoint; i >= Math.max(0, midPoint - 8); i--) {
-                                    if (processedName[i] === ' ' || processedName[i] === '-' || processedName[i] === '_') {
-                                        breakPoint = i;
-                                        break;
-                                    }
-                                }
-
-                                if (breakPoint === midPoint) {
-                                    // No good break point found, just split at middle
-                                    return processedName.substring(0, midPoint) + '\n' + processedName.substring(midPoint);
-                                } else {
-                                    // Split at the break point
-                                    return processedName.substring(0, breakPoint) + '\n' + processedName.substring(breakPoint + 1);
-                                }
-                            }
+                            return formatLabel(ele.data('name'));
                         },
                         'text-valign': 'center',
                         'text-halign': 'center',
@@ -85,7 +94,9 @@ function initializeVisualization() {
                         'target-arrow-shape': 'triangle',
                         'curve-style': 'bezier',
                         'control-point-step-size': 40,
-                        'label': 'data(name)',
+                        'label': function(ele) {
+                            return formatLabel(ele.data('name'));
+                        },
                         'font-size': 10,
                         'text-rotation': 'autorotate',
                         'text-margin-y': -10
@@ -137,7 +148,7 @@ function initializeVisualization() {
 
             // Layout options
             layout: {
-                name: layoutName
+                name: layoutState.name
             },
 
             // Interaction options
@@ -360,80 +371,102 @@ function initializeVisualization() {
             cy = initCytoscape();
         }
 
-        // For Euler, defer the entire update to next tick
-        if (layoutName === 'euler' && currentLayout) {
-            // Stop it first
-            if (currentLayout) {
-                currentLayout.stop();
-                currentLayout = null;
-            }
-
-            // Defer everything to next event loop tick
-            setTimeout(() => {
-                updateGraph(graphData);  // Call ourselves again
-            }, 100);
-            return;
-        }
-
-        // Normal flow for non-Euler or second pass
-        if (currentLayout) {
-            currentLayout.stop();
-            currentLayout = null;
+        // Stop any running layout
+        if (layoutState.stop) {
+            layoutState.stop();
+            layoutState.stop = null;
         }
 
         updateGraphElements(graphData);
     }
 
-    // Update graph with new data
     function updateGraphElements(graphData) {
         console.log("UpdateGraphElements was called.")
+
         // Save current positions
         const oldPositions = {};
-        console.log("getting old positions")
         cy.nodes().forEach(node => {
-            oldPositions[node.id()] = node.position();
+            const pos = node.position();
+            oldPositions[node.id()] = { x: pos.x, y: pos.y };
         });
-        console.log("removing elements")
-        // Clear and add new elements (like original)
-        cy.elements().remove();
 
-        console.log("going to add elements")
+        // Extract new graph data
+        let newNodes = [];
+        let newEdges = [];
+
         if (graphData.elements) {
-            console.log("in if")
-            console.log("adding elements")
-            cy.add(graphData.elements);
+            newNodes = graphData.elements.nodes || [];
+            newEdges = graphData.elements.edges || [];
         } else {
-            console.log("in else")
             // Handle old format
-            const elements = {
-                nodes: graphData.nodes?.map(node => ({
-                    data: { id: node.name, ...node }
-                })) || [],
-                edges: graphData.edges?.map(edge => ({
-                    data: {
-                        id: `${edge.source}_${edge.target}_${Math.random()}`,
-                        source: edge.source,
-                        target: edge.target,
-                        ...edge
-                    }
-                })) || []
-            };
-            console.log("adding elements")
-            cy.add(elements);
+            newNodes = (graphData.nodes || []).map(node => ({
+                data: { id: node.name, ...node }
+            }));
+            newEdges = (graphData.edges || []).map(edge => ({
+                data: {
+                    id: `${edge.source}_${edge.target}_${Math.random()}`,
+                    source: edge.source,
+                    target: edge.target,
+                    ...edge
+                }
+            }));
         }
-        console.log("added elements, now restoring positions")
-        // Restore any positions we had
-        cy.nodes().forEach(node => {
-            if (oldPositions[node.id()]) {
-                node.position(oldPositions[node.id()]);
+
+        // Create sets of IDs for comparison
+        const currentNodeIds = new Set(cy.nodes().map(n => n.id()));
+        const currentEdgeIds = new Set(cy.edges().map(e => e.id()));
+        const newNodeIds = new Set(newNodes.map(n => n.data.id));
+        const newEdgeIds = new Set(newEdges.map(e => e.data.id));
+
+        // Find differences
+        const nodesToRemove = [...currentNodeIds].filter(id => !newNodeIds.has(id));
+        const nodesToAdd = newNodes.filter(n => !currentNodeIds.has(n.data.id));
+        const nodesToUpdate = newNodes.filter(n => currentNodeIds.has(n.data.id));
+
+        const edgesToRemove = [...currentEdgeIds].filter(id => !newEdgeIds.has(id));
+        const edgesToAdd = newEdges.filter(e => !currentEdgeIds.has(e.data.id));
+
+        console.log(`Nodes - Remove: ${nodesToRemove.length}, Add: ${nodesToAdd.length}, Update: ${nodesToUpdate.length}`);
+        console.log(`Edges - Remove: ${edgesToRemove.length}, Add: ${edgesToAdd.length}`);
+
+        nodesToRemove.forEach(id => {
+            cy.getElementById(id).remove();
+        });
+
+        // Remove edges that are gone
+        edgesToRemove.forEach(id => {
+            cy.getElementById(id).remove();
+        });
+
+        // Update existing nodes (update their data but keep positions)
+        nodesToUpdate.forEach(nodeData => {
+            const existingNode = cy.getElementById(nodeData.data.id);
+            if (existingNode) {
+                // Update data while preserving position
+                const currentPos = existingNode.position();
+                existingNode.data(nodeData.data);
+                existingNode.position(currentPos);
             }
         });
-        // Always run layout - it will handle positioned vs unpositioned nodes
-        console.log("Updated Graph, Running Layout now.")
+
+        // Add new nodes
+        cy.add(nodesToAdd);
+
+        // Add new edges
+        cy.add(edgesToAdd);
+
+        // Restore positions for nodes that existed before
+        cy.nodes().forEach(node => {
+            const nodeId = node.id();
+            if (oldPositions[nodeId]) {
+                node.position(oldPositions[nodeId]);
+            }
+        });
+
+        // Run layout to position any new nodes
         runLayout();
-        console.log("Ran the layout, now updating graph stats")
+
         updateGraphStats();
-        console.log("UpdateGraph Function finished.")
     }
 
     // Get layout options for different layout types
@@ -532,17 +565,23 @@ function initializeVisualization() {
 
     // Run the current layout
     function runLayout() {
-        if (currentLayout) {
-            currentLayout.stop();
+        // Stop previous if exists
+        if (layoutState.stop) {
+            layoutState.stop();
+            layoutState.stop = null;
         }
 
-        const layoutOptions = getLayoutOptions(layoutName);
-        currentLayout = cy.layout(layoutOptions);
-        currentLayout.run();
+        const layoutOptions = getLayoutOptions(layoutState.name);
+        setTimeout(() => {
+            const layout = cy.layout(layoutOptions);
+            layoutState.stop = () => layout.stop();
+            layout.run();
+        }, 100);
     }
+
     // Set layout by name
     function setLayout(newLayoutName) {
-        layoutName = newLayoutName;
+        layoutState.name = newLayoutName;
         runLayout();
 
         // Update UI to show current layout
@@ -556,34 +595,37 @@ function initializeVisualization() {
                 'circle': 'Circle',
                 'concentric': 'Concentric',
                 'grid': 'Grid',
+                'euler': 'Euler (Live Physics)'
             };
-            layoutDisplay.textContent = layoutNames[layoutName] || layoutName;
+            layoutDisplay.textContent = layoutNames[layoutState.name] || layoutState.name;
         }
     }
 
     // Toggle between layouts
     function toggleTreeLayout() {
-        layoutName = layoutName === 'cose' ? 'breadthfirst' : 'cose';
+        layoutState.name = layoutState.name === 'cose' ? 'breadthfirst' : 'cose';
         runLayout();
-        return layoutName === 'breadthfirst';
+        return layoutState.name === 'breadthfirst';
     }
 
     // Update force parameters
     function updateForces(forces) {
         // Only apply to physics layouts
-        if (!['fcose', 'euler'].includes(layoutName)) {
+        if (!['fcose', 'euler'].includes(layoutState.name)) {
             return;
         }
 
         // Update current forces
         Object.assign(currentForces, forces);
 
-        // For Euler, smoothly transition to new parameters
-        if (layoutName === 'euler') {
-            if (currentLayout) {
-                currentLayout.stop();
-            }
+        // Stop current layout if running
+        if (layoutState.stop) {
+            layoutState.stop();
+            layoutState.stop = null;
+        }
 
+        // For Euler, smoothly transition to new parameters
+        if (layoutState.name === 'euler') {
             // Get current node positions
             const currentPositions = {};
             cy.nodes().forEach(node => {
@@ -609,13 +651,14 @@ function initializeVisualization() {
             options.refresh = 10; // Faster refresh for smoother updates
             options.animationThreshold = 0.5; // Higher threshold for smoother animation
 
-            currentLayout = cy.layout(options);
-            currentLayout.run();
+            const layout = cy.layout(options);
+            layoutState.stop = () => layout.stop();
+            layout.run();
             return;
         }
 
         // For fCoSE, only handle spring length
-        if (layoutName === 'fcose' && forces.springLength !== undefined) {
+        if (layoutState.name === 'fcose' && forces.springLength !== undefined) {
             const currentPositions = {};
             cy.nodes().forEach(node => {
                 currentPositions[node.id()] = {
@@ -624,7 +667,7 @@ function initializeVisualization() {
                 };
             });
 
-            const options = getLayoutOptions(layoutName);
+            const options = getLayoutOptions(layoutState.name);
             options.idealEdgeLength = forces.springLength;
 
             options.randomize = false;
@@ -638,12 +681,9 @@ function initializeVisualization() {
             options.animationEasing = 'ease-out';
             options.numIter = 250;
 
-            if (currentLayout) {
-                currentLayout.stop();
-            }
-
-            currentLayout = cy.layout(options);
-            currentLayout.run();
+            const layout = cy.layout(options);
+            layoutState.stop = () => layout.stop();
+            layout.run();
         }
     }
 
@@ -652,24 +692,15 @@ function initializeVisualization() {
         // Physics only makes sense for force-directed layouts
         const forceLayouts = ['fcose', 'cose', 'cola', 'euler'];
 
-        if (forceLayouts.includes(layoutName)) {
+        if (forceLayouts.includes(layoutState.name)) {
             app.state.physicsEnabled = enabled;
 
-            if (layoutName === 'euler') {
-                // Euler has special handling
-                if (enabled && currentLayout) {
-                    currentLayout.run(); // Resume simulation
-                } else if (currentLayout) {
-                    currentLayout.stop(); // Pause simulation
-                }
-            } else {
-                // Other layouts
-                if (enabled) {
-                    runLayout();
-                } else if (currentLayout) {
-                    currentLayout.stop();
-                }
+            if (enabled) {
+                runLayout();  // Start fresh
+            } else if (layoutState.stop) {
+                layoutState.stop();
             }
+
             return true;
         } else {
             return false;
@@ -714,6 +745,13 @@ function initializeVisualization() {
         cy = initCytoscape();
     }
 
+    function stopCurrentLayout() {
+        if (layoutState.stop) {
+            layoutState.stop();
+            layoutState.stop = null;
+        }
+    }
+
     // Return public API
     return {
         updateGraph,
@@ -723,6 +761,7 @@ function initializeVisualization() {
         updateForces,
         exportAsPNG,
         setLayout,
-        getCy: () => cy // Expose cy instance for debugging
+        stopCurrentLayout,
+        getCy: () => cy, // Expose cy instance for debugging
     };
 }

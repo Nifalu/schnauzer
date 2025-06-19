@@ -69,10 +69,21 @@ function initializeApp() {
             showStatus('Disconnected from server. Trying to reconnect...', 'warning');
         });
 
-        app.socket.on('graph_update', function(graphData) {
-            app.state.currentGraph = graphData;
-            app.viz.updateGraph(graphData);
-            updateGraphStats(graphData);
+        app.socket.on('graph_update', function(gdata) {
+            console.log('Socket received graph_update:')
+            console.log("some other logging")
+
+            if (app.viz && app.viz.stopCurrentLayout) {
+                console.log("trying to stop the layout")
+                app.viz.stopCurrentLayout();
+                console.log("layout stopped")
+            }
+            console.log("passed the if")
+            app.state.currentGraph = gdata;
+            console.log("overwrote currentGraph")
+            app.viz.updateGraph(gdata); // this is problematic
+            console.log("Updated Graph")
+            //updateGraphStats(gdata);
             showStatus('Graph updated', 'success', 3000);
         });
 

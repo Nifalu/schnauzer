@@ -252,30 +252,17 @@ viz_client.send_graph(G, 'Custom Coloring!', type_color_map=type_color_map)
 ```python
 import networkx as nx
 from schnauzer import VisualizationClient
-from time import sleep
 
-G = nx.DiGraph()
+G = nx.MultiDiGraph()
 
 nodes = [ 'A', 'B', 'C', 'D', 'E']
-edges = [ ('A', 'B'), ('A', 'C'), ('B', 'D'), ('C', 'D'), ('D', 'E') ]
+edges = [ ('A', 'B', 0), ('A', 'B', 1), ('A', 'C', 0), ('B', 'D', 0), ('C', 'D', 0),('C', 'D', 1),('C', 'D', 2), ('D', 'E', 0),('D', 'E', 1),('D', 'E', 2),('D', 'E', 3),('A', 'D', 0),('E', 'C', 0)]
+
+G.add_nodes_from(nodes)
+G.add_edges_from(edges)
 
 viz_client = VisualizationClient()
-
-for node in nodes:
-    G.add_node(node),
-    for u, v in edges:
-        G.add_edge(u, v) if node == v else None
-
-    viz_client.send_graph(G, 'Live Updates')
-    sleep(2) # Simulate some delay in adding nodes and edges
-
-
-
-
-
-
-
-
+viz_client.send_graph(G, 'Multi Graph')
 ```
 
-![simple](img/live-updates.gif)
+![simple](img/multigraph.png)

@@ -199,28 +199,10 @@ function initializeUIControls() {
         const forceControls = document.getElementById('force-controls');
         if (!forceControls) return;
 
-        const forceLayouts = ['fcose', 'euler'];
+        const forceLayouts = ['fcose'];
 
         if (forceLayouts.includes(layoutName)) {
             forceControls.style.display = 'block';
-
-            // Show/hide controls based on layout type
-            const springLengthControl = document.getElementById('spring-length-control');
-            const springStrengthControl = document.getElementById('spring-strength-control');
-            const massControl = document.getElementById('mass-control');
-            const gravityControl = document.getElementById('gravity-control');
-
-            if (layoutName === 'euler') {
-                // Show all controls for Euler
-                if (springStrengthControl) springStrengthControl.style.display = 'block';
-                if (massControl) massControl.style.display = 'block';
-                if (gravityControl) gravityControl.style.display = 'block';
-            } else {
-                // Hide Euler-specific controls for other layouts
-                if (springStrengthControl) springStrengthControl.style.display = 'none';
-                if (massControl) massControl.style.display = 'none';
-                if (gravityControl) gravityControl.style.display = 'none';
-            }
         } else {
             forceControls.style.display = 'none';
         }

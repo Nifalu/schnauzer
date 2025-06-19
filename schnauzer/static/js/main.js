@@ -16,7 +16,6 @@ function initializeApp() {
 
     // Global state variables
     app.state = {
-        physicsEnabled: true,
         currentGraph: null,
         selectedNode: null,
         selectedEdge: null,
@@ -32,7 +31,6 @@ function initializeApp() {
         nodeDetailsTitle: document.getElementById('node-details-title'),
         nodeDetailsContent: document.getElementById('node-details-content'),
         resetZoomBtn: document.getElementById('reset-zoom'),
-        togglePhysicsBtn: document.getElementById('toggle-physics'),
         nodeCountEl: document.getElementById('node-count'),
         edgeCountEl: document.getElementById('edge-count')
     };
@@ -70,20 +68,17 @@ function initializeApp() {
         });
 
         app.socket.on('graph_update', function(gdata) {
-            console.log('Socket received graph_update:')
-            console.log("some other logging")
-
             if (app.viz && app.viz.stopCurrentLayout) {
-                console.log("trying to stop the layout")
                 app.viz.stopCurrentLayout();
-                console.log("layout stopped")
             }
-            console.log("passed the if")
             app.state.currentGraph = gdata;
-            console.log("overwrote currentGraph")
-            app.viz.updateGraph(gdata); // this is problematic
-            console.log("Updated Graph")
-            //updateGraphStats(gdata);
+            app.viz.updateGraph(gdata);
+            updateGraphStats(gdata);
+            document.title = gdata.title;
+            const header = document.querySelector('h1.text-center');
+            if (header) {
+                header.textContent = gdata.title;
+            }
             showStatus('Graph updated', 'success', 3000);
         });
 
@@ -101,20 +96,6 @@ function initializeApp() {
             }
         });
 
-        // Toggle physics button
-        app.elements.togglePhysicsBtn.addEventListener('click', function() {
-            app.state.physicsEnabled = !app.state.physicsEnabled;
-            const result = app.viz.togglePhysics(app.state.physicsEnabled);
-
-            if (result) {
-                // Physics was toggled
-                this.textContent = app.state.physicsEnabled ? 'Freeze Layout' : 'Resume Layout';
-            } else {
-                // Physics doesn't apply to current layout
-                showStatus('Physics controls only apply to force-directed layouts', 'info', 3000);
-            }
-        });
-
         // Layout dropdown handlers
         const layoutOptions = document.querySelectorAll('.layout-option');
         layoutOptions.forEach(option => {
@@ -126,31 +107,13 @@ function initializeApp() {
                 if (app.viz && app.viz.setLayout) {
                     app.viz.setLayout(layoutName);
 
-                    // Update physics button state
-                    const forceLayouts = ['fcose', 'euler'];
-                    const physicsBtn = app.elements.togglePhysicsBtn;
-
-                    if (forceLayouts.includes(layoutName)) {
-                        // Enable physics button for force-directed layouts
-                        physicsBtn.disabled = false;
-                        physicsBtn.classList.remove('disabled');
-                        // Update control panel visibility
-                        if (app.ui && app.ui.updateControlPanelVisibility) {
-                            app.ui.updateControlPanelVisibility(layoutName);
-                        }
-                    } else {
-                        // Disable physics button for non-force layouts
-                        physicsBtn.disabled = true;
-                        physicsBtn.classList.add('disabled');
-                        // Hide force controls
-                        if (app.ui && app.ui.updateControlPanelVisibility) {
-                            app.ui.updateControlPanelVisibility(layoutName);
-                        }
-                    }
-
                     // Update active state in dropdown
                     layoutOptions.forEach(opt => opt.classList.remove('active'));
                     this.classList.add('active');
+
+                    if (app.ui && app.ui.updateControlPanelVisibility) {
+                        app.ui.updateControlPanelVisibility(layoutName);
+}
                 }
             });
         });

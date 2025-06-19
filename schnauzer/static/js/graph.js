@@ -377,12 +377,6 @@ function initializeVisualization() {
             layoutState.stop = null;
         }
 
-        updateGraphElements(graphData);
-    }
-
-    function updateGraphElements(graphData) {
-        console.log("UpdateGraphElements was called.")
-
         // Save current positions
         const oldPositions = {};
         cy.nodes().forEach(node => {
@@ -426,9 +420,6 @@ function initializeVisualization() {
         const edgesToRemove = [...currentEdgeIds].filter(id => !newEdgeIds.has(id));
         const edgesToAdd = newEdges.filter(e => !currentEdgeIds.has(e.data.id));
 
-        console.log(`Nodes - Remove: ${nodesToRemove.length}, Add: ${nodesToAdd.length}, Update: ${nodesToUpdate.length}`);
-        console.log(`Edges - Remove: ${edgesToRemove.length}, Add: ${edgesToAdd.length}`);
-
         nodesToRemove.forEach(id => {
             cy.getElementById(id).remove();
         });
@@ -450,6 +441,36 @@ function initializeVisualization() {
         });
 
         // Add new nodes
+        nodesToAdd.forEach((nodeData) => {
+            const nodeId = nodeData.data.id;
+
+            // Find edges that connect to this new node
+            const incomingEdges = newEdges.filter(e => e.data.target === nodeId);
+            const parentIds = incomingEdges.map(e => e.data.source);
+
+            // Get existing parent nodes
+            const parentNodes = parentIds
+                .map(id => cy.getElementById(id))
+                .filter(node => node && node.length > 0);
+
+            if (parentNodes.length > 0) {
+                // Position below the average position of parents
+                let avgX = 0, avgY = 0;
+                parentNodes.forEach(parent => {
+                    const pos = parent.position();
+                    avgX += pos.x;
+                    avgY += pos.y;
+                });
+                nodeData.position = {
+                    x: avgX / parentNodes.length,
+                    y: (avgY / parentNodes.length) + 100  // 100 pixels below parents
+                };
+            } else {
+                // No parents - place at origin (layout will handle it)
+                nodeData.position = { x: 0, y: 0 };
+            }
+        });
+
         cy.add(nodesToAdd);
 
         // Add new edges
@@ -462,11 +483,7 @@ function initializeVisualization() {
                 node.position(oldPositions[nodeId]);
             }
         });
-
-        // Run layout to position any new nodes
         runLayout();
-
-        updateGraphStats();
     }
 
     // Get layout options for different layout types
@@ -491,27 +508,6 @@ function initializeVisualization() {
                 tilingPaddingHorizontal: 10,
                 randomize: true,
                 quality: 'default'
-            },
-            'euler': {
-                name: 'euler',
-                springLength: edge => 200,
-                springCoeff: edge => 0.0001,  // Even lower for gentler springs
-                mass: node => 1,  // Lower mass for more responsiveness
-                gravity: -5,  // Gentle gravity
-                pull: 0.0005,  // Gentle centering force
-                theta: 0.8,
-                dragCoeff: 0.2,  // Lower drag for smoother movement
-                movementThreshold: 1,  // Standard threshold
-                timeStep: 20,  // Standard timestep
-                refresh: 10,  // Faster refresh
-                animate: true,
-                animationDuration: undefined,
-                animationThreshold: 0.5,
-                ungrabifyWhileSimulating: false,
-                fit: true,
-                padding: 30,
-                randomize: false,
-                infinite: true
             },
             'breadthfirst': {
                 directed: true,
@@ -595,7 +591,6 @@ function initializeVisualization() {
                 'circle': 'Circle',
                 'concentric': 'Concentric',
                 'grid': 'Grid',
-                'euler': 'Euler (Live Physics)'
             };
             layoutDisplay.textContent = layoutNames[layoutState.name] || layoutState.name;
         }
@@ -611,7 +606,7 @@ function initializeVisualization() {
     // Update force parameters
     function updateForces(forces) {
         // Only apply to physics layouts
-        if (!['fcose', 'euler'].includes(layoutState.name)) {
+        if (!['fcose'].includes(layoutState.name)) {
             return;
         }
 
@@ -622,39 +617,6 @@ function initializeVisualization() {
         if (layoutState.stop) {
             layoutState.stop();
             layoutState.stop = null;
-        }
-
-        // For Euler, smoothly transition to new parameters
-        if (layoutState.name === 'euler') {
-            // Get current node positions
-            const currentPositions = {};
-            cy.nodes().forEach(node => {
-                currentPositions[node.id()] = {
-                    x: node.position('x'),
-                    y: node.position('y')
-                };
-            });
-
-            const options = getLayoutOptions('euler');
-
-            // Apply all current force values
-            options.springLength = edge => currentForces.springLength;
-            options.springCoeff = edge => currentForces.springCoeff;
-            options.mass = node => currentForces.mass;
-            options.gravity = currentForces.gravity;
-
-            options.randomize = false; // Don't randomize
-            options.positions = node => currentPositions[node.id()]; // Start from current positions
-            options.fit = false; // Don't re-fit
-            options.animate = true;
-            options.animationDuration = undefined; // Let it run continuously
-            options.refresh = 10; // Faster refresh for smoother updates
-            options.animationThreshold = 0.5; // Higher threshold for smoother animation
-
-            const layout = cy.layout(options);
-            layoutState.stop = () => layout.stop();
-            layout.run();
-            return;
         }
 
         // For fCoSE, only handle spring length
@@ -684,26 +646,6 @@ function initializeVisualization() {
             const layout = cy.layout(options);
             layoutState.stop = () => layout.stop();
             layout.run();
-        }
-    }
-
-    // Toggle physics on/off
-    function togglePhysics(enabled) {
-        // Physics only makes sense for force-directed layouts
-        const forceLayouts = ['fcose', 'cose', 'cola', 'euler'];
-
-        if (forceLayouts.includes(layoutState.name)) {
-            app.state.physicsEnabled = enabled;
-
-            if (enabled) {
-                runLayout();  // Start fresh
-            } else if (layoutState.stop) {
-                layoutState.stop();
-            }
-
-            return true;
-        } else {
-            return false;
         }
     }
 
@@ -756,7 +698,6 @@ function initializeVisualization() {
     return {
         updateGraph,
         resetZoom,
-        togglePhysics,
         toggleTreeLayout,
         updateForces,
         exportAsPNG,

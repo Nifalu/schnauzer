@@ -4,6 +4,9 @@ This module provides both a ZeroMQ backend for receiving NetworkX graph data
 and a web frontend for interactive visualization. The server renders network graphs
 using D3.js and provides interactive features like zooming, panning, and node details.
 """
+import \
+    logging
+
 from flask import Flask, render_template, jsonify, session
 from flask_socketio import SocketIO, emit
 import argparse
@@ -15,6 +18,9 @@ import zmq
 import json
 import time
 import importlib.resources as pkg_resources
+from logging import Logger
+
+log = logging.getLogger(__name__)
 
 class Server:
     """
@@ -26,7 +32,7 @@ class Server:
     2. A Flask web server to serve the interactive visualization
     """
 
-    def __init__(self, web_port=8080, backend_port=8086):
+    def __init__(self, web_port=8080, backend_port=8086, log_level = logging.WARN):
         """
         Initialize the visualization server.
 
@@ -34,6 +40,7 @@ class Server:
             web_port (int): Port to run the web server on
             backend_port (int): Port to listen for backend connections
         """
+        log.setLevel(log_level)
         self.web_port = web_port
         self.backend_port = backend_port
         self.current_graph = {'nodes': [], 'edges': [], 'title': 'NetworkX DiGraph Visualization'}
@@ -112,32 +119,28 @@ class Server:
             """Endpoint to get current graph data."""
             return jsonify(self.current_graph)
 
+        @self.app.route('/favicon.ico')
+        def favicon():
+            """Serve favicon from the root path for browsers that expect it there."""
+            import os
+            return self.app.send_static_file('favicon/favicon.ico')
+
     def _setup_socketio_handlers(self):
         """Set up SocketIO event handlers for real-time updates."""
         @self.socketio.on('connect')
         def handle_connect():
-            print('Web client connected')
             # Send current graph data to new client
+            log.info('Web client connected')
             emit('graph_update', self.current_graph)
 
         @self.socketio.on('disconnect')
         def handle_disconnect():
-            print('Web client disconnected')
-
-        @self.socketio.on('request_update')
-        def handle_update_request(data):
-            """Handle client request for updates."""
-            print('Client requested update')
-            emit('graph_update', self.current_graph)
+            log.info('Web client disconnected')
 
     def _on_graph_update(self):
         """Callback for when the graph is updated from a backend client."""
-        print("="*50)
-        print("About to emit graph_update with following data:")
-        print(json.dumps(self.current_graph, indent=2))
-        print("="*50)
         self.socketio.emit('graph_update', self.current_graph)
-        print("Broadcasted updated graph to web clients")
+        log.info('Sent graph update to web clients')
 
     def start(self):
         """Start both the backend and web servers.
@@ -158,8 +161,10 @@ class Server:
         self.server_thread.start()
 
         # Start the web server in the main thread
+        print("="*50)
         print(f"Starting visualization server at http://localhost:{self.web_port}/")
         print(f"Backend listener running on port {self.backend_port}")
+        print("="*50)
 
         # Run Flask server (this blocks until the server is stopped)
         self.socketio.run(
@@ -180,8 +185,6 @@ class Server:
         # Create a ZeroMQ REP socket
         self.socket = self.context.socket(zmq.REP)
         self.socket.bind(f"tcp://*:{self.backend_port}")
-
-        print(f"Backend listener started on port {self.backend_port}")
 
         while self.running:
             try:
@@ -207,14 +210,12 @@ class Server:
                     # Broadcast the update to web clients
                     self._on_graph_update()
 
-                    print("Received graph update from backend")
-
                     # Send acknowledgement
                     self.socket.send_string("Update received")
 
                 except json.JSONDecodeError as e:
                     print(f"Invalid JSON received: {e}")
-                    self.socket.send_string(f"Error: Invalid JSON - {e}")
+                    log.error(f"Invalid JSON received: {e}")
 
             except zmq.error.Again:
                 # No message available, sleep briefly to prevent CPU hogging
@@ -222,11 +223,7 @@ class Server:
                 continue
 
             except Exception as e:
-                print(f"Error in server loop: {e}")
-                try:
-                    self.socket.send_string(f"Error: {e}")
-                except:
-                    pass
+                log.error(f"Error in server loop: {e}")
                 time.sleep(0.1)  # Wait a bit before continuing
 
         # Cleanup when stopping

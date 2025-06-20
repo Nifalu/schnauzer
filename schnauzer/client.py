@@ -8,6 +8,9 @@ import zmq
 import json
 import atexit
 import networkx
+from logging import Logger
+
+log = logging.getLogger(__name__)
 
 class VisualizationClient:
     """Client for sending graph data to the visualization server.
@@ -16,13 +19,14 @@ class VisualizationClient:
     and provides methods to convert and send NetworkX graph data for display.
     """
 
-    def __init__(self, host='localhost', port=8086):
+    def __init__(self, host='localhost', port=8086, log_level = logging.WARN):
         """Initialize the visualization client.
 
         Args:
             host (str): Hostname or IP address of the visualization server
             port (int): Port number the server is listening on
         """
+        log.setLevel(log_level)
         self.host = host
         self.port = port
         self.context = zmq.Context()
@@ -48,14 +52,15 @@ class VisualizationClient:
             self.socket.setsockopt(zmq.LINGER, 0)  # Don't wait on close
             self.socket.setsockopt(zmq.RCVTIMEO, 5000)  # 5 second timeout for future operations
 
-            print(f"Trying to connect to visualization server at {self.host}:{self.port} ... ", end = '')
+            log.info(f"Trying to connect to visualization server at {self.host}:{self.port} ... ")
+
             self.socket.connect(f"tcp://{self.host}:{self.port}")
-            print("Success!")
+            log.info("Success!")
 
             self.connected = True
             return True
         except zmq.error.ZMQError as e:
-            print(f"Could not create socket: {e}")
+            log.error(f"Could not create socket: {e}")
             self.socket = None
             return False
 
@@ -64,7 +69,7 @@ class VisualizationClient:
         if self.socket:
             try:
                 self.socket.close()
-                print("Disconnected from visualization server")
+                log.info("Disconnected from visualization server")
             except:
                 pass
             self.socket = None
@@ -117,11 +122,11 @@ class VisualizationClient:
 
             # Wait for acknowledgement
             ack = self.socket.recv_string()
-            print(f"Server response: {ack}")
+            log.info(f"Server response: {ack}")
 
             return True
         except zmq.error.ZMQError as e:
-            print(f"Error sending graph data: {e}")
+            log.error(f"Error sending graph data: {e}")
             self.connected = False
             if self.socket:
                 self.socket.close()
@@ -129,7 +134,7 @@ class VisualizationClient:
             # Try to reconnect once
             return self._connect() and self.send_graph(graph, title)
         except Exception as e:
-            print(f"Unexpected error sending graph data: {e}")
+            log.error(f"Unexpected error sending graph data: {e}")
             self.connected = False
             if self.socket:
                 self.socket.close()

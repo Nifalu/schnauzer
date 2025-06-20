@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setup(
     name="schnauzer",
-    version="0.2.0",
+    version="0.2.1",
     description="Visualize networkx graphs interactively in a web browser.",
     author="Nico Bachmann",
     author_email="python@deschnauz.ch",

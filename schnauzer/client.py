@@ -8,7 +8,7 @@ import zmq
 import json
 import atexit
 import networkx
-from logging import Logger
+import logging
 
 log = logging.getLogger(__name__)
 

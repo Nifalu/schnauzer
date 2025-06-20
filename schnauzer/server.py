@@ -18,7 +18,7 @@ import zmq
 import json
 import time
 import importlib.resources as pkg_resources
-from logging import Logger
+import logging
 
 log = logging.getLogger(__name__)
 

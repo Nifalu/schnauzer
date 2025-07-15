@@ -197,15 +197,13 @@ class Server:
                     continue
 
                 try:
-                    # Try to parse as JSON for graph data
-                    graph_data = json.loads(message)
+                    message_data = json.loads(message)
 
-                    # Update the current graph
-                    self.current_graph = graph_data
-
-                    # Ensure title is present, use default if not provided
-                    if 'title' not in self.current_graph:
-                        self.current_graph['title'] = 'NetworkX DiGraph Visualization'
+                    # Store GraphML data and metadata
+                    self.current_graph = {
+                        'title': message_data.get('title', 'NetworkX Graph Visualization')
+                        'graphml_data': message_data['data'],
+                    }
 
                     # Broadcast the update to web clients
                     self._on_graph_update()

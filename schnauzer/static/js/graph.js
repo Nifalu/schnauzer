@@ -377,113 +377,14 @@ function initializeVisualization() {
             layoutState.stop = null;
         }
 
-        // Save current positions
-        const oldPositions = {};
-        cy.nodes().forEach(node => {
-            const pos = node.position();
-            oldPositions[node.id()] = { x: pos.x, y: pos.y };
-        });
-
-        // Extract new graph data
-        let newNodes = [];
-        let newEdges = [];
-
-        if (graphData.elements) {
-            newNodes = graphData.elements.nodes || [];
-            newEdges = graphData.elements.edges || [];
-        } else {
-            // Handle old format
-            newNodes = (graphData.nodes || []).map(node => ({
-                data: { id: node.name, ...node }
-            }));
-            newEdges = (graphData.edges || []).map(edge => ({
-                data: {
-                    id: `${edge.source}_${edge.target}_${Math.random()}`,
-                    source: edge.source,
-                    target: edge.target,
-                    ...edge
-                }
-            }));
-        }
-
-        // Create sets of IDs for comparison
-        const currentNodeIds = new Set(cy.nodes().map(n => n.id()));
-        const currentEdgeIds = new Set(cy.edges().map(e => e.id()));
-        const newNodeIds = new Set(newNodes.map(n => n.data.id));
-        const newEdgeIds = new Set(newEdges.map(e => e.data.id));
-
-        // Find differences
-        const nodesToRemove = [...currentNodeIds].filter(id => !newNodeIds.has(id));
-        const nodesToAdd = newNodes.filter(n => !currentNodeIds.has(n.data.id));
-        const nodesToUpdate = newNodes.filter(n => currentNodeIds.has(n.data.id));
-
-        const edgesToRemove = [...currentEdgeIds].filter(id => !newEdgeIds.has(id));
-        const edgesToAdd = newEdges.filter(e => !currentEdgeIds.has(e.data.id));
-
-        nodesToRemove.forEach(id => {
-            cy.getElementById(id).remove();
-        });
-
-        // Remove edges that are gone
-        edgesToRemove.forEach(id => {
-            cy.getElementById(id).remove();
-        });
-
-        // Update existing nodes (update their data but keep positions)
-        nodesToUpdate.forEach(nodeData => {
-            const existingNode = cy.getElementById(nodeData.data.id);
-            if (existingNode) {
-                // Update data while preserving position
-                const currentPos = existingNode.position();
-                existingNode.data(nodeData.data);
-                existingNode.position(currentPos);
-            }
-        });
-
-        // Add new nodes
-        nodesToAdd.forEach((nodeData) => {
-            const nodeId = nodeData.data.id;
-
-            // Find edges that connect to this new node
-            const incomingEdges = newEdges.filter(e => e.data.target === nodeId);
-            const parentIds = incomingEdges.map(e => e.data.source);
-
-            // Get existing parent nodes
-            const parentNodes = parentIds
-                .map(id => cy.getElementById(id))
-                .filter(node => node && node.length > 0);
-
-            if (parentNodes.length > 0) {
-                // Position below the average position of parents
-                let avgX = 0, avgY = 0;
-                parentNodes.forEach(parent => {
-                    const pos = parent.position();
-                    avgX += pos.x;
-                    avgY += pos.y;
-                });
-                nodeData.position = {
-                    x: avgX / parentNodes.length,
-                    y: (avgY / parentNodes.length) + 100  // 100 pixels below parents
-                };
-            } else {
-                // No parents - place at origin (layout will handle it)
-                nodeData.position = { x: 0, y: 0 };
-            }
-        });
-
-        cy.add(nodesToAdd);
-
-        // Add new edges
-        cy.add(edgesToAdd);
-
-        // Restore positions for nodes that existed before
-        cy.nodes().forEach(node => {
-            const nodeId = node.id();
-            if (oldPositions[nodeId]) {
-                node.position(oldPositions[nodeId]);
-            }
-        });
-        runLayout();
+        // Use Cytoscape.js built-in GraphML import
+        cy.graphml({ layoutBy: false })
+          .then(function(data) {
+              return cy.add(data);
+          })
+          .then(function() {
+              runLayout();
+          });
     }
 
     // Get layout options for different layout types

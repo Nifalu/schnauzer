@@ -74,7 +74,7 @@ function initializeApp() {
             app.state.currentGraph = gdata;
             app.viz.updateGraph(gdata);
             updateGraphStats(gdata);
-            document.title = gdata.title;
+            document.title = gdata.title || 'Graph Visualisation';
             const header = document.querySelector('h1.text-center');
             if (header) {
                 header.textContent = gdata.title;

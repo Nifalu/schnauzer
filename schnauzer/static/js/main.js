@@ -45,17 +45,26 @@ function initializeApp() {
         timeout: 20000
     });
 
-    // Set up socket event handlers
-    setupSocketHandlers();
-
     // Initialize the visualization
-    app.viz = initializeVisualization();
+    app.viz = window.initializeVisualization ? window.initializeVisualization() : null;
+    if (!app.viz) {
+        console.error('Failed to initialize visualization');
+        return;
+    }
 
-    // Attach event listeners to UI elements
-    setupUIEventListeners();
+    // Wait a bit for everything to be ready before setting up sockets
+    setTimeout(() => {
+        // Set up socket event handlers
+        setupSocketHandlers();
 
-    // Initial graph load
-    loadGraphData();
+        // Attach event listeners to UI elements
+        setupUIEventListeners();
+
+        // Initial graph load with additional delay
+        setTimeout(() => {
+            loadGraphData();
+        }, 200);
+    }, 300);
 
     // Socket.IO event handlers
     function setupSocketHandlers() {
@@ -112,9 +121,9 @@ function initializeApp() {
                     layoutOptions.forEach(opt => opt.classList.remove('active'));
                     this.classList.add('active');
 
-                    if (app.ui && app.ui.updateControlPanelVisibility) {
-                        app.ui.updateControlPanelVisibility(layoutName);
-}
+                    if (window.SchGraphApp.ui && window.SchGraphApp.ui.updateControlPanelVisibility) {
+                        window.SchGraphApp.ui.updateControlPanelVisibility(layoutName);
+                    }
                 }
             });
         });
@@ -219,9 +228,9 @@ function initializeApp() {
     function showStatus(message, type, duration = 0) {
         const statusEl = app.elements.statusMessage;
 
-        // Set message and show
+        // Set message and show, preserving the floating-panel and status-panel classes
         statusEl.textContent = message;
-        statusEl.className = `alert alert-${type} status-message`;
+        statusEl.className = `floating-panel status-panel alert alert-${type}`;
         statusEl.classList.remove('d-none');
 
         // Auto-hide after duration if specified

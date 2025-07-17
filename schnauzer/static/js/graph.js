@@ -52,140 +52,150 @@ function initializeVisualization() {
 
     // Initialize Cytoscape
     function initCytoscape() {
-        cy = cytoscape({
-            container: document.getElementById('graph-container'),
+        const container = document.getElementById('graph-container');
+        if (!container) {
+            console.error('Graph container not found!');
+            return null;
+        }
 
-            style: [
-                // Default node styling
-                {
-                    selector: 'node',
-                    style: {
-                        'background-color': 'data(color)',
-                        'label': function(ele) {
-                            return formatLabel(ele.data('name'));
-                        },
-                        'text-valign': 'center',
-                        'text-halign': 'center',
-                        'text-wrap': 'wrap',
-                        'text-max-width': '100px',
-                        'width': 'label',
-                        'height': function(ele) {
-                            const name = ele.data('name') || '';
-                            return name.length > 16 ? 40 : 25; // Taller for two-line labels
-                        },
-                        'padding': 10,
-                        'shape': 'roundrectangle',
-                        'border-width': 1,
-                        'border-color': '#fff',
-                        'font-size': 14,
-                        'color': function(ele) {
-                            return window.SchGraphApp.utils.getTextColor(ele.data('color') || '#999');
+        try {
+            cy = cytoscape({
+                container: container,
+                style: [
+                    // Default node styling
+                    {
+                        selector: 'node',
+                        style: {
+                            'background-color': 'data(color)',
+                            'label': function(ele) {
+                                return formatLabel(ele.data('name'));
+                            },
+                            'text-valign': 'center',
+                            'text-halign': 'center',
+                            'text-wrap': 'wrap',
+                            'text-max-width': '100px',
+                            'width': 'label',
+                            'height': function(ele) {
+                                const name = ele.data('name') || '';
+                                return name.length > 16 ? 40 : 25; // Taller for two-line labels
+                            },
+                            'padding': 10,
+                            'shape': 'roundrectangle',
+                            'border-width': 1,
+                            'border-color': '#fff',
+                            'font-size': 14,
+                            'color': function(ele) {
+                                return window.SchGraphApp.utils.getTextColor(ele.data('color') || '#999');
+                            }
                         }
-                    }
+                    },
+
+                    // Default edge styling
+                    {
+                        selector: 'edge',
+                        style: {
+                            'width': 2,
+                            'line-color': 'data(color)',
+                            'target-arrow-color': 'data(color)',
+                            'target-arrow-shape': 'triangle',
+                            'curve-style': 'bezier',
+                            'control-point-step-size': 40,
+                            'label': function(ele) {
+                                return formatLabel(ele.data('name'));
+                            },
+                            'font-size': 10,
+                            'text-rotation': 'autorotate',
+                            'text-margin-y': -10
+                        }
+                    },
+
+                    // Multi-edge handling
+                    {
+                        selector: 'edge.multiple',
+                        style: {
+                            'curve-style': 'bezier',
+                            'control-point-step-size': 40
+                        }
+                    },
+
+                    // Selected node/edge styling
+                    {
+                        selector: ':selected',
+                        style: {
+                            'border-width': 4,
+                            'border-color': '#007bff'
+                        }
+                    },
+
+                    // Hover effects
+                    {
+                        selector: 'node:active',
+                        style: {
+                            'overlay-padding': 2,
+                            'overlay-opacity': 0.1
+                        }
+                    },
+
+                    // Search highlighting
+                    {
+                        selector: '.dimmed',
+                        style: {
+                            'opacity': 0.2
+                        }
+                    },
+                    {
+                        selector: '.highlighted',
+                        style: {
+                            'opacity': 1,
+                            'z-index': 999
+                        }
+                    },
+                    {
+                        selector: '.trace-highlight',
+                        style: {
+                            'border-width': 6,
+                            'border-color': '#e74c3c',
+                            'border-opacity': 1,
+                            'overlay-color': '#e74c3c',
+                            'overlay-padding': 8,
+                            'overlay-opacity': 0.3,
+                            'z-index': 1000
+                        }
+                    },
+                    {
+                        selector: 'edge.trace-highlight',
+                        style: {
+                            'line-color': '#e74c3c',
+                            'target-arrow-color': '#e74c3c',
+                            'source-arrow-color': '#e74c3c',
+                            'width': 5,
+                            'z-index': 1000,
+                            'overlay-color': '#e74c3c',
+                            'overlay-padding': 3,
+                            'overlay-opacity': 0.3
+                        }
+                    },
+                ],
+
+                // Layout options
+                layout: {
+                    name: layoutState.name
                 },
 
-                // Default edge styling
-                {
-                    selector: 'edge',
-                    style: {
-                        'width': 2,
-                        'line-color': 'data(color)',
-                        'target-arrow-color': 'data(color)',
-                        'target-arrow-shape': 'triangle',
-                        'curve-style': 'bezier',
-                        'control-point-step-size': 40,
-                        'label': function(ele) {
-                            return formatLabel(ele.data('name'));
-                        },
-                        'font-size': 10,
-                        'text-rotation': 'autorotate',
-                        'text-margin-y': -10
-                    }
-                },
+                // Interaction options
+                minZoom: 0.1,
+                maxZoom: 4,
+                wheelSensitivity: 0.2
+            });
 
-                // Multi-edge handling
-                {
-                    selector: 'edge.multiple',
-                    style: {
-                        'curve-style': 'bezier',
-                        'control-point-step-size': 40
-                    }
-                },
+            // Set up event handlers
+            setupEventHandlers();
 
-                // Selected node/edge styling
-                {
-                    selector: ':selected',
-                    style: {
-                        'border-width': 4,
-                        'border-color': '#007bff'
-                    }
-                },
-
-                // Hover effects
-                {
-                    selector: 'node:active',
-                    style: {
-                        'overlay-padding': 10,
-                        'overlay-opacity': 0.2
-                    }
-                },
-
-                // Search highlighting
-                {
-                    selector: '.dimmed',
-                    style: {
-                        'opacity': 0.2
-                    }
-                },
-                {
-                    selector: '.highlighted',
-                    style: {
-                        'opacity': 1,
-                        'z-index': 999
-                    }
-                },
-                {
-                    selector: '.trace-highlight',
-                    style: {
-                        'border-width': 6,
-                        'border-color': '#e74c3c',
-                        'border-opacity': 1,
-                        'overlay-color': '#e74c3c',
-                        'overlay-padding': 8,
-                        'overlay-opacity': 0.3,
-                        'z-index': 1000
-                    }
-                },
-                {
-                    selector: 'edge.trace-highlight',
-                    style: {
-                        'line-color': '#e74c3c',
-                        'target-arrow-color': '#e74c3c',
-                        'source-arrow-color': '#e74c3c',
-                        'width': 5,
-                        'z-index': 1000,
-                        'overlay-color': '#e74c3c',
-                        'overlay-padding': 3,
-                        'overlay-opacity': 0.3
-                    }
-                },
-            ],
-
-            // Layout options
-            layout: {
-                name: layoutState.name
-            },
-
-            // Interaction options
-            minZoom: 0.1,
-            maxZoom: 4,
-            wheelSensitivity: 0.2
-        });
-
-        // Set up event handlers
-        setupEventHandlers();
-
-        return cy;
+            return cy;
+        } catch (error) {
+            console.error('Error initializing Cytoscape:', error);
+            return null;
+        }
     }
 
     // Set up event handlers for nodes and edges
@@ -403,6 +413,16 @@ function initializeVisualization() {
     function updateGraph(graphData) {
         if (!cy) {
             cy = initCytoscape();
+            // If still no cy, something went wrong
+            if (!cy) {
+                console.error('Failed to initialize Cytoscape');
+                return;
+            }
+        }
+
+        if (!graphData || typeof graphData !== 'object') {
+            console.error('Invalid graph data:', graphData);
+            return;
         }
 
         // Stop any running layout
@@ -431,7 +451,13 @@ function initializeVisualization() {
             animate: true,
             animationDuration: 1000,
             fit: true,
-            padding: 50
+            padding: 50,
+            boundingBox: {
+                x1: 50,
+                y1: 100,
+                x2: window.innerWidth - 500,
+                y2: window.innerHeight - 100
+            }
         };
 
         // Layout-specific options
@@ -589,7 +615,15 @@ function initializeVisualization() {
 
     // Reset zoom and center
     function resetZoom() {
-        cy.fit(50); // 50px padding
+        cy.fit({
+            padding: 50,
+            boundingBox: {
+                x1: 50,
+                y1: 100,
+                x2: window.innerWidth - 500,  // Account for right panels
+                y2: window.innerHeight - 100   // Account for bottom controls
+            }
+        });
     }
 
     // Update graph statistics
@@ -644,3 +678,5 @@ function initializeVisualization() {
         getCy: () => cy, // Expose cy instance for debugging
     };
 }
+
+window.initializeVisualization = initializeVisualization;

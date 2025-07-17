@@ -1,11 +1,25 @@
-/* Custom styles for Cytoscape.js network visualization */
+/* Reset and base styles */
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+/* Full window graph layout */
+.graph-wrapper {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
 
 /* Graph container styling */
 #graph-container {
     width: 100%;
-    height: calc(100vh - 200px);
-    position: relative;
-    overflow: hidden;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
     background: #f9f9f9;
     opacity: 1;
 }
@@ -16,27 +30,169 @@
     height: 100%;
 }
 
-/* Remove any default transparency */
-.cytoscape-container {
-    opacity: 1;
+/* Base floating panel styles */
+.floating-panel {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.70);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    z-index: 100;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
-/* Node details panel */
-#node-details {
-    transition: all 0.3s ease;
+/* Panel positioning */
+.top-left {
+    top: 20px;
+    left: 20px;
+    padding: 12px 20px;
+}
+
+.status-panel {
+    bottom: 20px;
+    left: 20px;
+    padding: 12px 20px;
+    max-width: 300px;
+}
+
+.top-center {
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    font-size: 14px;
+}
+
+.top-right {
+    top: 20px;
+    right: 20px;
+    width: 280px;
+}
+
+.right-side {
+    top: 320px;
+    right: 20px;
+    width: 280px;  /* Same as search panel */
+    max-height: calc(100vh - 360px);  /* Prevents overlap with bottom controls */
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.bottom-center {
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.bottom-right {
+    bottom: 20px;
+    right: 20px;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Title styling */
+.graph-title {
+    font-size: 1.25rem;
+    margin: 0;
+    font-weight: 600;
+    color: #333;
+}
+
+/* Panel components */
+.panel-title {
+    padding: 12px 16px;
+    margin: 0;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.panel-body {
+    padding: 16px;
+}
+
+.panel-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 8px 8px 0 0;
+}
+
+/* Node details specific styling */
+#node-details .panel-header h5 {
+    font-size: 1rem;  /* Same as search panel title */
 }
 
 #node-details-content {
-    max-height: 500px;
+    flex: 1;
     overflow-y: auto;
+    font-size: 0.875rem;  /* Same as search panel */
+}
+
+/* Make all text in details panel consistent */
+#node-details p {
+    font-size: 0.875rem;
+    margin: 4px 0;
+}
+
+#node-details h6 {
+    font-size: 0.95rem;
+}
+
+/* Search panel styling */
+.top-right .form-control-sm {
+    font-size: 0.875rem;
+}
+
+.top-right .btn-sm {
+    font-size: 0.875rem;
+}
+
+/* Bottom controls styling */
+.divider {
+    color: #ccc;
+    margin: 0 4px;
+}
+
+.bottom-right .btn {
+    white-space: nowrap;
+}
+
+/* Spring length slider */
+#spring-length-control .form-range {
+    width: 150px;
+}
+
+#spring-length-value {
+    min-width: 35px;
+    text-align: center;
+    font-size: 14px;
+}
+
+/* Graph stats styling */
+.top-center span {
+    font-weight: 500;
+}
+
+#node-count, #edge-count {
+    color: #0d6efd;
+    font-weight: 600;
 }
 
 /* Graph tooltip styling */
 .graph-tooltip {
     position: absolute;
     max-width: 300px;
-    background-color: white;
-    border: 1px solid rgba(0, 0, 0, 0.12);
+    background-color: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.1);
     border-radius: 6px;
     padding: 10px;
     box-shadow: 0 3px 10px rgba(0,0,0,0.15);
@@ -45,6 +201,8 @@
     z-index: 1000;
     opacity: 0;
     transition: opacity 0.2s ease-in-out;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
 }
 
 .graph-tooltip h4 {
@@ -67,29 +225,45 @@
     color: #555;
 }
 
-/* Graph controls */
-.graph-controls {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    background: rgba(255, 255, 255, 0.9);
-    padding: 10px;
-    border-radius: 5px;
-    z-index: 100;
-    width: auto !important;
-    height: auto !important;
-    max-width: fit-content;
-    max-height: fit-content;
+/* Status message styling */
+.status-panel {
+    font-size: 14px;
 }
 
-/* Layout dropdown styling */
-.graph-controls .dropdown {
-    display: inline-block;
+.status-panel.alert-success {
+    background-color: rgba(255, 255, 255, 0.70);
+    color: #198754;
+    border-color: #198754;
+    border-width: 2px;
 }
 
+.status-panel.alert-error,
+.status-panel.alert-danger {
+    background-color: rgba(255, 255, 255, 0.70);
+    color: #dc3545;
+    border-color: #dc3545;
+    border-width: 2px;
+}
+
+.status-panel.alert-warning {
+    background-color: rgba(255, 255, 255, 0.70);
+    color: #ffc107;
+    border-color: #ffc107;
+    border-width: 2px;
+}
+
+.status-panel.alert-info {
+    background-color: rgba(255, 255, 255, 0.70);
+    color: #0d6efd;
+    border-color: #0d6efd;
+    border-width: 2px;
+}
+
+/* Dropdown menu styling */
 .dropdown-menu {
     max-height: 400px;
     overflow-y: auto;
+    font-size: 14px;
 }
 
 .dropdown-header {
@@ -112,65 +286,7 @@
     color: white;
 }
 
-/* Disabled button state */
-.btn.disabled,
-.btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-}
-
-/* Force controls visibility transition */
-#force-controls {
-    transition: opacity 0.3s ease;
-}
-
-/* Animation for status messages */
-.status-message {
-    transition: opacity 0.5s ease-in-out;
-}
-
-/* Graph statistics styling */
-.graph-stats .badge {
-    font-size: 14px;
-}
-
-.graph-stats .list-group-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-/* Search box styling */
-#search-nodes {
-    font-size: 14px;
-}
-
-.input-group .btn-outline-secondary {
-    border-color: #ced4da;
-}
-
-/* Node properties in details panel */
-.node-properties {
-    max-height: 500px;
-    overflow-y: auto;
-}
-
-.node-properties .collapse {
-    transition: all 0.2s ease;
-}
-
-/* Additional styles for property formatting */
-.node-description {
-    white-space: pre-wrap;
-    word-break: break-word;
-}
-
-/* Ensure nodes and edges start fully visible */
-.node, .edge {
-    opacity: 1;
-}
-
-/* Search highlighting - only apply when classes are present */
+/* Search highlighting */
 #graph-container .dimmed {
     opacity: 0.2 !important;
     transition: opacity 0.2s ease;
@@ -180,4 +296,84 @@
     opacity: 1 !important;
     z-index: 999;
     transition: opacity 0.2s ease;
+}
+
+#graph-container .trace-highlight {
+    border-width: 6px !important;
+    border-color: #e74c3c !important;
+    border-opacity: 1 !important;
+    z-index: 1000;
+}
+
+#graph-container edge.trace-highlight {
+    line-color: #e74c3c !important;
+    target-arrow-color: #e74c3c !important;
+    width: 5px !important;
+    z-index: 1000;
+}
+
+/* Node description formatting */
+.node-description {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Remove any default transparency */
+.cytoscape-container {
+    opacity: 1;
+}
+
+/* Ensure nodes and edges start fully visible */
+.node, .edge {
+    opacity: 1;
+}
+
+/* Scrollbar styling for panels */
+.floating-panel::-webkit-scrollbar {
+    width: 8px;
+}
+
+.floating-panel::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
+.floating-panel::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+}
+
+.floating-panel::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+/* Animation for panel appearance */
+.floating-panel {
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .top-right {
+        width: 240px;
+    }
+
+    .right-side {
+        width: 300px;
+    }
+
+    .floating-panel {
+        font-size: 13px;
+    }
 }

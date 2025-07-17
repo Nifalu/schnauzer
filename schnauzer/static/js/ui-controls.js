@@ -20,48 +20,6 @@ function initializeUIControls() {
         }
     }
 
-    // Create force controls panel if not exists
-    if (!document.getElementById('force-controls')) {
-        const controlsPanel = document.createElement('div');
-        controlsPanel.id = 'force-controls';
-        controlsPanel.className = 'card mb-4';
-        controlsPanel.innerHTML = `
-            <div class="card-header">
-                <h5 class="mb-0">Layout Controls</h5>
-            </div>
-            <div class="card-body">
-                <div class="mb-3" id="spring-length-control">
-                    <label for="spring-length-slider" class="form-label">Spring Length: <span id="spring-length-value">200</span></label>
-                    <input type="range" class="form-range" id="spring-length-slider" min="50" max="400" step="10" value="200">
-                </div>
-                <div class="mb-3" id="spring-strength-control" style="display: none;">
-                    <label for="spring-strength-slider" class="form-label">Spring Strength: <span id="spring-strength-value">0.0001</span></label>
-                    <input type="range" class="form-range" id="spring-strength-slider" min="0.00001" max="0.001" step="0.00001" value="0.0001">
-                </div>
-                <div class="mb-3" id="mass-control" style="display: none;">
-                    <label for="mass-slider" class="form-label">Node Mass: <span id="mass-value">4</span></label>
-                    <input type="range" class="form-range" id="mass-slider" min="1" max="20" step="1" value="4">
-                </div>
-                <div class="mb-3" id="gravity-control" style="display: none;">
-                    <label for="gravity-slider" class="form-label">Gravity: <span id="gravity-value">-0.8</span></label>
-                    <input type="range" class="form-range" id="gravity-slider" min="-5" max="5" step="0.1" value="-0.8">
-                </div>
-            </div>
-        `;
-
-        // Add it after the graph information panel
-        const graphInfoPanel = document.querySelector('.graph-stats').closest('.card');
-        if (graphInfoPanel && graphInfoPanel.parentNode) {
-            graphInfoPanel.parentNode.insertBefore(controlsPanel, graphInfoPanel.nextSibling);
-        } else {
-            // Fallback insertion location
-            const container = document.querySelector('.col-md-3');
-            if (container) {
-                container.appendChild(controlsPanel);
-            }
-        }
-    }
-
     // Set up search functionality
     setupSearch();
 
@@ -84,41 +42,17 @@ function initializeUIControls() {
      * Set up force control sliders
      */
     function setupForceControls() {
-        // Spring length slider
+        // Only spring length slider now
         const springLengthSlider = document.getElementById('spring-length-slider');
-        if (springLengthSlider) {
+        const springLengthValue = document.getElementById('spring-length-value');
+
+        if (springLengthSlider && springLengthValue) {
+            // Initialize Bootstrap tooltip
+            new bootstrap.Tooltip(springLengthSlider);
+
             springLengthSlider.addEventListener('input', debounce(() => {
-                updateSliderValue('spring-length-value', springLengthSlider.value);
+                springLengthValue.textContent = springLengthSlider.value;
                 updateForceParameter('springLength', parseInt(springLengthSlider.value));
-            }, 50));
-        }
-
-        // Spring strength slider
-        const springStrengthSlider = document.getElementById('spring-strength-slider');
-        if (springStrengthSlider) {
-            springStrengthSlider.addEventListener('input', debounce(() => {
-                const value = parseFloat(springStrengthSlider.value);
-                updateSliderValue('spring-strength-value', value.toFixed(5));
-                updateForceParameter('springCoeff', value);
-            }, 50));
-        }
-
-        // Mass slider
-        const massSlider = document.getElementById('mass-slider');
-        if (massSlider) {
-            massSlider.addEventListener('input', debounce(() => {
-                updateSliderValue('mass-value', massSlider.value);
-                updateForceParameter('mass', parseInt(massSlider.value));
-            }, 50));
-        }
-
-        // Gravity slider
-        const gravitySlider = document.getElementById('gravity-slider');
-        if (gravitySlider) {
-            gravitySlider.addEventListener('input', debounce(() => {
-                const value = parseFloat(gravitySlider.value);
-                updateSliderValue('gravity-value', value.toFixed(1));
-                updateForceParameter('gravity', value);
             }, 50));
         }
     }
@@ -391,33 +325,18 @@ function initializeUIControls() {
      * Update control panel visibility based on layout type
      */
     function updateControlPanelVisibility(layoutName) {
-        const forceControls = document.getElementById('force-controls');
-        if (!forceControls) return;
+        const springControl = document.getElementById('spring-length-control');
+        if (!springControl) return;
 
         const forceLayouts = ['fcose'];
 
         if (forceLayouts.includes(layoutName)) {
-            forceControls.style.display = 'block';
+            springControl.classList.remove('d-none');
         } else {
-            forceControls.style.display = 'none';
+            springControl.classList.add('d-none');
         }
     }
 
-    /**
-     * Update control labels and values for specific layout types
-     */
-    function updateLayoutSpecificControls(layoutName) {
-        const linkSlider = document.getElementById('link-slider');
-        const linkLabel = document.querySelector('label[for="link-slider"]');
-
-        if (linkSlider && linkLabel) {
-            linkSlider.min = 50;
-            linkSlider.max = 400;
-            linkSlider.step = 10;
-            linkSlider.value = 200;
-            linkLabel.innerHTML = `Link Distance: <span id="link-value">200</span>`;
-        }
-    }
     /**
      * Debounce function to limit rapid firing of an event
      */

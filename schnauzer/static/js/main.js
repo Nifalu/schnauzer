@@ -84,7 +84,7 @@ function initializeApp() {
         });
 
         app.socket.on('connect_error', function(error) {
-            showStatus('Connection error: ' + error, 'error');
+            showStatus('Connection error: ' + error, 'error', 3000);
         });
     }
 

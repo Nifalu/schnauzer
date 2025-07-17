@@ -80,6 +80,7 @@ function initializeApp() {
                 header.textContent = gdata.title;
             }
             showStatus('Graph updated', 'success', 3000);
+            window.dispatchEvent(new Event('graphUpdated'));
         });
 
         app.socket.on('connect_error', function(error) {
@@ -199,6 +200,7 @@ function initializeApp() {
                 app.viz.updateGraph(graph);
                 updateGraphStats(graph);
                 showStatus('Graph loaded successfully', 'success', 3000);
+                window.dispatchEvent(new Event('graphUpdated'));
             })
             .catch(error => {
                 console.error('Error loading graph data:', error);

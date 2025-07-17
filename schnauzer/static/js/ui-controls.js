@@ -65,6 +65,15 @@ function initializeUIControls() {
     // Set up search functionality
     setupSearch();
 
+    // Set up trace functionality
+    initializeTrace();
+
+    // Reinitialize trace when graph updates
+    window.addEventListener('graphUpdated', () => {
+        setupSearch()
+        initializeTrace();
+    });
+
     // Set up force controls
     setupForceControls();
 
@@ -155,29 +164,94 @@ function initializeUIControls() {
                 return;
             }
 
+            // Parse search term for filters (format: "attribute:value")
+            const filters = [];
+            let generalSearchTerms = [];
+
+            // Split search into potential filters and general search terms
+            searchTerm.split(/\s+/).forEach(term => {
+                if (term.includes(':') && term.split(':').length === 2) {
+                    const [attr, value] = term.split(':');
+                    if (attr && value) {
+                        filters.push({ attribute: attr.toLowerCase(), value: value.toLowerCase() });
+                    }
+                } else if (term) {
+                    generalSearchTerms.push(term);
+                }
+            });
+
+            const generalSearch = generalSearchTerms.join(' ');
+
+            // Debug logging
+            console.log(`Search term: "${searchTerm}", Filters:`, filters, `General search: "${generalSearch}"`);
+
+            // Helper function to check if an element matches the search criteria
+            function elementMatches(data) {
+                // Check filters first
+                for (const filter of filters) {
+                    const attrValue = String(data[filter.attribute] || '').toLowerCase();
+                    if (!attrValue.includes(filter.value)) {
+                        return false; // If any filter doesn't match, exclude this element
+                    }
+                }
+
+                // If we only have filters and they all passed, include the element
+                if (filters.length > 0 && !generalSearch) {
+                    return true;
+                }
+
+                // For general search, check all attributes
+                if (generalSearch) {
+                    // Convert all data attributes to searchable text
+                    const searchableText = Object.entries(data)
+                        .map(([key, value]) => {
+                            // Handle different value types
+                            if (Array.isArray(value)) {
+                                return value.join(' ');
+                            } else if (typeof value === 'object' && value !== null) {
+                                return JSON.stringify(value);
+                            }
+                            return String(value || '');
+                        })
+                        .join(' ')
+                        .toLowerCase();
+
+                    // Debug: log what we're searching in
+                    if (data.description && data.description.toLowerCase().includes('have')) {
+                        console.log('Found "have" in:', data, 'searchableText:', searchableText);
+                    }
+
+                    return searchableText.includes(generalSearch);
+                }
+
+                return false;
+            }
+
             // Add dimmed to ALL elements first
             cy.elements().addClass('dimmed');
 
             // Find matching nodes
-            const matchingNodes = cy.nodes().filter(node => {
-                const data = node.data();
-                // Check both id and name fields (important for nodes like 'A', 'B', etc.)
-                const nodeId = (data.id || '').toLowerCase();
-                const nodeName = (data.name || '').toLowerCase();
-                const nodeType = (data.type || '').toLowerCase();
-                const nodeDesc = (data.description || '').toLowerCase();
+            const matchingNodes = cy.nodes().filter(node => elementMatches(node.data()));
+            console.log(`Matching nodes:`, matchingNodes.length);
 
-                return nodeId.includes(searchTerm) ||
-                       nodeName.includes(searchTerm) ||
-                       nodeType.includes(searchTerm) ||
-                       nodeDesc.includes(searchTerm);
+            // Find matching edges
+            const matchingEdges = cy.edges().filter(edge => elementMatches(edge.data()));
+            console.log(`Matching edges:`, matchingEdges.length);
+
+            // Log which edges are matching
+            matchingEdges.forEach(edge => {
+                console.log(`Matching edge:`, edge.data());
             });
 
-            // Remove dimmed and add highlighted to matching nodes
+            // Remove dimmed and add highlighted to matching elements
             matchingNodes.removeClass('dimmed').addClass('highlighted');
+            matchingEdges.removeClass('dimmed').addClass('highlighted');
 
-            // Also highlight edges between matching nodes
-            matchingNodes.edgesWith(matchingNodes).removeClass('dimmed').addClass('highlighted');
+            // Also highlight edges connected to matching nodes
+            matchingNodes.connectedEdges().removeClass('dimmed').addClass('highlighted');
+
+            // Also highlight nodes connected to matching edges
+            matchingEdges.connectedNodes().removeClass('dimmed').addClass('highlighted');
 
         }, 200));
 
@@ -190,6 +264,127 @@ function initializeUIControls() {
                 searchBox.dispatchEvent(new Event('input'));
             });
         }
+    }
+
+
+    // Trace state management (simplified)
+    const traceState = {
+        attribute: null,
+        traceColor: '#e74c3c' // Single red color for tracing
+    };
+
+    /**
+     * Initialize trace functionality
+     */
+    function initializeTrace() {
+        const cy = window.SchGraphApp.viz?.getCy?.();
+        if (!cy) return;
+
+        // Discover and populate attributes
+        const attributes = new Set();
+
+        // Get attributes from all nodes
+        cy.nodes().forEach(node => {
+            Object.keys(node.data()).forEach(key => {
+                if (key !== 'id' && key !== 'name') {
+                    attributes.add(key);
+                }
+            });
+        });
+
+        // Get attributes from all edges
+        cy.edges().forEach(edge => {
+            Object.keys(edge.data()).forEach(key => {
+                if (key !== 'id' && key !== 'source' && key !== 'target') {
+                    attributes.add(key);
+                }
+            });
+        });
+
+        // Populate dropdown
+        const select = document.getElementById('trace-attribute');
+        select.innerHTML = '<option value="">No trace</option>';
+
+        Array.from(attributes).sort().forEach(attr => {
+            const option = document.createElement('option');
+            option.value = attr;
+            option.textContent = attr;
+            select.appendChild(option);
+        });
+
+        // Handle attribute selection
+        select.addEventListener('change', () => {
+            traceState.attribute = select.value || null;
+            clearTraceHighlights();
+
+            // Show/hide info text
+            const infoEl = document.getElementById('trace-info');
+            if (traceState.attribute) {
+                infoEl.style.display = 'block';
+            } else {
+                infoEl.style.display = 'none';
+            }
+        });
+    }
+
+    /**
+     * Perform trace for clicked element
+     */
+    function performTrace(element) {
+        if (!traceState.attribute) return;
+
+        const cy = window.SchGraphApp.viz?.getCy?.();
+        if (!cy) return;
+
+        const clickedData = element.data();
+        const traceValue = clickedData[traceState.attribute];
+
+        if (traceValue === undefined || traceValue === null) {
+            console.log(`No value for attribute "${traceState.attribute}" in clicked element`);
+            return;
+        }
+
+        // Clear previous highlights
+        clearTraceHighlights();
+
+        // Convert trace value to string for contains check
+        const traceValueStr = String(traceValue)
+                .toLowerCase()
+                .replace(/[^a-zA-Z0-9\s\-_]/g, ' ')  // Replace special chars with spaces
+                .replace(/\s+/g, ' ')                 // Collapse multiple spaces
+                .trim();
+
+        // Find all elements with matching value
+        const matchingElements = cy.elements().filter(el => {
+            const elValue = el.data()[traceState.attribute];
+
+            if (elValue === undefined || elValue === null) {
+                return false;
+            }
+
+            // Convert to string and check if it contains the trace value
+            const elValueStr = String(elValue)
+                .toLowerCase()
+                .replace(/[^a-zA-Z0-9\s\-_]/g, ' ')  // Replace special chars with spaces
+                .replace(/\s+/g, ' ')                 // Collapse multiple spaces
+                .trim();
+            return elValueStr.includes(traceValueStr);
+        });
+
+        // Apply highlight
+        matchingElements.addClass('trace-highlight');
+
+        console.log(`Tracing ${traceState.attribute}="${traceValue}": found ${matchingElements.length} matches`);
+    }
+
+    /**
+     * Clear all trace highlights
+     */
+    function clearTraceHighlights() {
+        const cy = window.SchGraphApp.viz?.getCy?.();
+        if (!cy) return;
+
+        cy.elements().removeClass('trace-highlight');
     }
 
     /**
@@ -234,6 +429,13 @@ function initializeUIControls() {
             timeout = setTimeout(() => func.apply(context, args), wait);
         };
     }
+
+    window.traceState = traceState;
+    window.performTrace = performTrace;
+
+    window.addEventListener('graphUpdated', () => {
+        initializeTrace();
+    });
 
     // Return public API
     return {

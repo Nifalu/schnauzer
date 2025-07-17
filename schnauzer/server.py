@@ -65,7 +65,8 @@ class Server:
         self._setup_routes()
         self._setup_socketio_handlers()
 
-    def _create_app(self):
+    @staticmethod
+    def _create_app():
         """Create and configure the Flask application.
 
         Returns:
@@ -199,11 +200,12 @@ class Server:
                 try:
                     message_data = json.loads(message)
 
-                    # Store GraphML data and metadata
-                    self.current_graph = {
-                        'title': message_data.get('title', 'NetworkX Graph Visualization')
-                        'graphml_data': message_data['data'],
-                    }
+                    # Handle the new format - cytoscape data is sent directly
+                    self.current_graph = message_data
+
+                    # Ensure we have a title
+                    if 'title' not in self.current_graph:
+                        self.current_graph['title'] = 'NetworkX Graph Visualization'
 
                     # Broadcast the update to web clients
                     self._on_graph_update()
@@ -214,6 +216,20 @@ class Server:
                 except json.JSONDecodeError as e:
                     print(f"Invalid JSON received: {e}")
                     log.error(f"Invalid JSON received: {e}")
+                    # Send error response to keep socket in sync
+                    self.socket.send_string("Error: Invalid JSON")
+
+                except KeyError as e:
+                    print(f"Missing expected key in message: {e}")
+                    log.error(f"Missing expected key in message: {e}")
+                    # Send error response to keep socket in sync
+                    self.socket.send_string(f"Error: Missing key {e}")
+
+                except Exception as e:
+                    print(f"Error processing message: {e}")
+                    log.error(f"Error processing message: {e}")
+                    # Send error response to keep socket in sync
+                    self.socket.send_string(f"Error: {e}")
 
             except zmq.error.Again:
                 # No message available, sleep briefly to prevent CPU hogging

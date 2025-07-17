@@ -68,14 +68,27 @@
                 <!-- Search box for nodes -->
                 <div class="card mb-4">
                     <div class="card-header">
-                        <h5 class="mb-0">Search Nodes</h5>
+                        <h5 class="mb-0">Search & Trace</h5>
                     </div>
                     <div class="card-body">
-                        <div class="input-group">
+                        <div class="input-group mb-2">
                             <input type="text" id="search-nodes" class="form-control" placeholder="Search...">
                             <button class="btn btn-outline-secondary" type="button" id="clear-search">
                                 <i class="bi bi-x"></i>
                             </button>
+                        </div>
+                        <small class="text-muted d-block mb-2">
+                            Search all attributes or filter with <code>attribute:value</code>
+                        </small>
+
+                        <div class="mb-2">
+                            <label for="trace-attribute" class="form-label small">Trace Attribute:</label>
+                            <select id="trace-attribute" class="form-select form-select-sm">
+                                <option value="">No trace</option>
+                            </select>
+                        </div>
+                        <div id="trace-info" class="small text-muted" style="display: none;">
+                            Click any element to highlight all with matching value
                         </div>
                     </div>
                 </div>

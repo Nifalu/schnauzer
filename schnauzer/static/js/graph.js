@@ -143,7 +143,32 @@ function initializeVisualization() {
                         'opacity': 1,
                         'z-index': 999
                     }
-                }
+                },
+                {
+                    selector: '.trace-highlight',
+                    style: {
+                        'border-width': 6,
+                        'border-color': '#e74c3c',
+                        'border-opacity': 1,
+                        'overlay-color': '#e74c3c',
+                        'overlay-padding': 8,
+                        'overlay-opacity': 0.3,
+                        'z-index': 1000
+                    }
+                },
+                {
+                    selector: 'edge.trace-highlight',
+                    style: {
+                        'line-color': '#e74c3c',
+                        'target-arrow-color': '#e74c3c',
+                        'source-arrow-color': '#e74c3c',
+                        'width': 5,
+                        'z-index': 1000,
+                        'overlay-color': '#e74c3c',
+                        'overlay-padding': 3,
+                        'overlay-opacity': 0.3
+                    }
+                },
             ],
 
             // Layout options
@@ -191,6 +216,11 @@ function initializeVisualization() {
             const node = evt.target;
             const data = node.data();
 
+            // Perform trace if enabled
+            if (window.traceState && window.traceState.attribute) {
+                window.performTrace(node);
+            }
+
             // Update selected state
             app.state.selectedNode = data.id;
             app.state.selectedEdge = null;
@@ -214,6 +244,10 @@ function initializeVisualization() {
         cy.on('tap', 'edge', function(evt) {
             const edge = evt.target;
             const data = edge.data();
+
+            if (window.traceState && window.traceState.attribute) {
+                window.performTrace(edge);
+            }
 
             // Update selected state
             app.state.selectedEdge = data.id;
@@ -377,14 +411,17 @@ function initializeVisualization() {
             layoutState.stop = null;
         }
 
-        // Use Cytoscape.js built-in GraphML import
-        cy.graphml({ layoutBy: false })
-          .then(function(data) {
-              return cy.add(data);
-          })
-          .then(function() {
-              runLayout();
-          });
+        // Clear existing elements
+        cy.elements().remove();
+
+        // Add new elements - graphData should have 'elements' property from nx.cytoscape_data()
+        if (graphData.elements) {
+            cy.add(graphData.elements);
+            runLayout();
+            updateGraphStats();
+        } else {
+            console.error('No elements found in graph data:', graphData);
+        }
     }
 
     // Get layout options for different layout types

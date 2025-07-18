@@ -77,7 +77,7 @@ function initializeVisualization() {
                             'width': 'label',
                             'height': function(ele) {
                                 const name = ele.data('name') || '';
-                                return name.length > 16 ? 40 : 25; // Taller for two-line labels
+                                return name.length > 12 ? 40 : 25; // Taller for two-line labels
                             },
                             'padding': 10,
                             'shape': 'roundrectangle',
@@ -99,7 +99,7 @@ function initializeVisualization() {
                             'target-arrow-color': 'data(color)',
                             'target-arrow-shape': 'triangle',
                             'curve-style': 'bezier',
-                            'control-point-step-size': 40,
+                            'control-point-step-size': 20,
                             'label': function(ele) {
                                 return formatLabel(ele.data('name'));
                             },
@@ -114,7 +114,7 @@ function initializeVisualization() {
                         selector: 'edge.multiple',
                         style: {
                             'curve-style': 'bezier',
-                            'control-point-step-size': 40
+                            'control-point-step-size': 20
                         }
                     },
 
@@ -122,7 +122,7 @@ function initializeVisualization() {
                     {
                         selector: ':selected',
                         style: {
-                            'border-width': 4,
+                            'border-width': 2,
                             'border-color': '#007bff'
                         }
                     },
@@ -153,12 +153,9 @@ function initializeVisualization() {
                     {
                         selector: '.trace-highlight',
                         style: {
-                            'border-width': 6,
+                            'border-width': 3,
                             'border-color': '#e74c3c',
                             'border-opacity': 1,
-                            'overlay-color': '#e74c3c',
-                            'overlay-padding': 8,
-                            'overlay-opacity': 0.3,
                             'z-index': 1000
                         }
                     },
@@ -169,10 +166,6 @@ function initializeVisualization() {
                             'target-arrow-color': '#e74c3c',
                             'source-arrow-color': '#e74c3c',
                             'width': 5,
-                            'z-index': 1000,
-                            'overlay-color': '#e74c3c',
-                            'overlay-padding': 3,
-                            'overlay-opacity': 0.3
                         }
                     },
                 ],
@@ -317,32 +310,12 @@ function initializeVisualization() {
 
             let html = `<h4>${displayName}</h4>`;
 
-            // Add parents if available
-            if (data.parents && Array.isArray(data.parents) && data.parents.length > 0) {
-                const parentNames = data.parents.map(p => {
-                    if (typeof p === 'object' && p.name) return p.name;
-                    if (typeof p === 'object' && p.id) return p.id;
-                    return String(p);
-                });
-                html += `<p><strong>Parents:</strong> ${escapeHTML(parentNames.join(', '))}</p>`;
-            }
-
-            // Add children if available
-            if (data.children && Array.isArray(data.children) && data.children.length > 0) {
-                const childNames = data.children.map(c => {
-                    if (typeof c === 'object' && c.name) return c.name;
-                    if (typeof c === 'object' && c.id) return c.id;
-                    return String(c);
-                });
-                html += `<p><strong>Children:</strong> ${escapeHTML(childNames.join(', '))}</p>`;
-            }
-
             // Add description if available
             if (data.description && data.description.trim() !== '') {
                 const desc = data.description.length > 150 ?
                     data.description.substring(0, 147) + "..." :
                     data.description;
-                html += `<hr><h6>Description</h6><div class="node-description">${escapeHTML(desc)}</div>`;
+                html += `<div class="node-description">${escapeHTML(desc)}</div>`;
             }
 
             // Position and show tooltip
@@ -362,10 +335,40 @@ function initializeVisualization() {
             const container = cy.container();
             const containerRect = container.getBoundingClientRect();
 
-            // Build tooltip content
-            let html = `<h4>${escapeHTML(data.name || "Edge")}</h4>`;
-            html += `<p><strong>From:</strong> ${escapeHTML(edge.source().data('name'))}</p>`;
-            html += `<p><strong>To:</strong> ${escapeHTML(edge.target().data('name'))}</p>`;
+            const fullName = data.name || "Node";
+            let displayName = fullName;
+
+            if (fullName.length > 16) {
+                let processedName = fullName;
+                if (fullName.length > 32) {
+                    processedName = fullName.substring(0, 32);
+                }
+
+                // Split into two lines
+                const midPoint = Math.floor(processedName.length / 2);
+                let breakPoint = midPoint;
+                for (let i = midPoint; i >= Math.max(0, midPoint - 8); i--) {
+                    if (processedName[i] === ' ' || processedName[i] === '-' || processedName[i] === '_') {
+                        breakPoint = i;
+                        break;
+                    }
+                }
+
+                if (breakPoint === midPoint) {
+                    displayName = processedName.substring(0, midPoint) + '<br>' + processedName.substring(midPoint);
+                } else {
+                    displayName = processedName.substring(0, breakPoint) + '<br>' + processedName.substring(breakPoint + 1);
+                }
+            }
+
+            let html = `<h4>${displayName}</h4>`;
+
+            if (data.description && data.description.trim() !== '') {
+                const desc = data.description.length > 150 ?
+                    data.description.substring(0, 147) + "..." :
+                    data.description;
+                html += `<div class="node-description">${escapeHTML(desc)}</div>`;
+            }
 
             // Position and show tooltip (using rendered coordinates)
             showTooltip(

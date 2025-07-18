@@ -56,6 +56,10 @@ body {
     max-width: 300px;
 }
 
+.status-panel.alert {
+    margin-bottom: 0;
+}
+
 .top-center {
     top: 20px;
     left: 50%;
@@ -74,7 +78,7 @@ body {
     top: 320px;
     right: 20px;
     width: 280px;  /* Same as search panel */
-    max-height: calc(100vh - 360px);  /* Prevents overlap with bottom controls */
+    max-height: calc(100vh - 400px);  /* Prevents overlap with bottom controls */
     overflow: hidden;
     display: flex;
     flex-direction: column;

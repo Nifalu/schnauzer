@@ -250,14 +250,6 @@ function initializeUIControls() {
         select.addEventListener('change', () => {
             traceState.attribute = select.value || null;
             clearTraceHighlights();
-
-            // Show/hide info text
-            const infoEl = document.getElementById('trace-info');
-            if (traceState.attribute) {
-                infoEl.style.display = 'block';
-            } else {
-                infoEl.style.display = 'none';
-            }
         });
     }
 

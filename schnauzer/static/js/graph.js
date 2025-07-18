@@ -437,6 +437,13 @@ function initializeVisualization() {
         // Add new elements - graphData should have 'elements' property from nx.cytoscape_data()
         if (graphData.elements) {
             cy.add(graphData.elements);
+
+            // Center all nodes at viewport center before layout
+            const centerX = (window.innerWidth - 300) / 2 ;  // Account for panels
+            const centerY = window.innerHeight / 2;
+
+            cy.nodes().positions({ x: centerX, y: centerY });
+
             runLayout();
             updateGraphStats();
         } else {
@@ -450,12 +457,11 @@ function initializeVisualization() {
             name: layoutType,
             animate: true,
             animationDuration: 1000,
-            fit: true,
-            padding: 50,
+            fit: false,
             boundingBox: {
-                x1: 50,
+                x1: 20,
                 y1: 100,
-                x2: window.innerWidth - 500,
+                x2: window.innerWidth - 350,
                 y2: window.innerHeight - 100
             }
         };
@@ -523,7 +529,6 @@ function initializeVisualization() {
         return Object.assign(baseOptions, layoutConfigs[layoutType] || {});
     }
 
-    // Run the current layout
     function runLayout() {
         // Stop previous if exists
         if (layoutState.stop) {
@@ -532,13 +537,85 @@ function initializeVisualization() {
         }
 
         const layoutOptions = getLayoutOptions(layoutState.name);
+        const layout = cy.layout(layoutOptions);
+        layoutState.stop = () => layout.stop();
+
+        // Get current zoom and pan for smooth transition
+        const startZoom = cy.zoom();
+        const startPan = cy.pan();
+        const zoomOutFactor = 0.8; // Zoom out to 60% of current
+
+        // Calculate viewport center
+        const viewportCenterX = window.innerWidth / 2 - 175; // Account for right panels
+        const viewportCenterY = window.innerHeight / 2;
+
+        // Calculate pan adjustment to keep zoom centered
+        const zoomRatio = zoomOutFactor;
+        const newPan = {
+            x: viewportCenterX - (viewportCenterX - startPan.x) * zoomRatio,
+            y: viewportCenterY - (viewportCenterY - startPan.y) * zoomRatio
+        };
+
+        // Start the layout
+        layout.run();
+
+        // Phase 1: Zoom out during first 2/3 of animation (centered)
+        cy.animate({
+            zoom: startZoom * zoomOutFactor,
+            pan: newPan,
+            duration: layoutOptions.animationDuration * 0.4,
+            easing: 'ease-in-out'
+        });
+
+        // Phase 2: Start zoom-to-fit just before layout finishes
         setTimeout(() => {
-            const layout = cy.layout(layoutOptions);
-            layoutState.stop = () => layout.stop();
-            layout.run();
-        }, 100);
+            ensureGraphVisible();
+        }, layoutOptions.animationDuration * 0.95);
     }
 
+    function ensureGraphVisible() {
+        // Get the bounding box of all elements
+        const bb = cy.elements().boundingBox();
+
+        // Define the desired viewport
+        const viewport = {
+            x1: 20,
+            y1: 100,
+            x2: window.innerWidth - 350,
+            y2: window.innerHeight - 100
+        };
+
+        // Calculate the viewport dimensions
+        const viewportWidth = viewport.x2 - viewport.x1;
+        const viewportHeight = viewport.y2 - viewport.y1;
+
+        // Calculate required zoom to fit
+        const zoomX = viewportWidth / bb.w;
+        const zoomY = viewportHeight / bb.h;
+        const targetZoom = Math.min(zoomX, zoomY, cy.maxZoom()); // 0.9 for a bit of padding
+
+        // Calculate center of bounding box
+        const bbCenterX = (bb.x1 + bb.x2) / 2;
+        const bbCenterY = (bb.y1 + bb.y2) / 2;
+
+        // Calculate center of viewport
+        const viewportCenterX = (viewport.x1 + viewport.x2) / 2;
+        const viewportCenterY = (viewport.y1 + viewport.y2) / 2;
+
+        // Calculate required pan
+        const targetPan = {
+            x: viewportCenterX - bbCenterX * targetZoom,
+            y: viewportCenterY - bbCenterY * targetZoom
+        };
+
+        // Animate to the target position
+        cy.animate({
+            zoom: targetZoom,
+            pan: targetPan,
+            duration: 500,
+            easing: 'ease-in-out'
+        });
+    }
     // Set layout by name
     function setLayout(newLayoutName) {
         layoutState.name = newLayoutName;
@@ -615,15 +692,7 @@ function initializeVisualization() {
 
     // Reset zoom and center
     function resetZoom() {
-        cy.fit({
-            padding: 50,
-            boundingBox: {
-                x1: 50,
-                y1: 100,
-                x2: window.innerWidth - 500,  // Account for right panels
-                y2: window.innerHeight - 100   // Account for bottom controls
-            }
-        });
+        ensureGraphVisible()
     }
 
     // Update graph statistics

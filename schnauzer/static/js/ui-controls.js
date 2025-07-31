@@ -200,12 +200,22 @@ function initializeUIControls() {
         }
     }
 
-
-    // Trace state management (simplified)
     const traceState = {
         attribute: null,
-        traceColor: '#e74c3c' // Single red color for tracing
+        traceColor: '#e74c3c',
+        showOrigins: false,
+        currentPathIndex: 0,
+        currentPaths: []
     };
+
+    // Define the handler separately to avoid duplicate listeners
+    function handleOriginsChange() {
+        const originsCheckbox = document.getElementById('show-origins');
+        traceState.showOrigins = originsCheckbox.checked;
+        traceState.currentPathIndex = 0;
+        traceState.currentPaths = [];
+        clearTraceHighlights();
+    }
 
     /**
      * Initialize trace functionality
@@ -251,61 +261,194 @@ function initializeUIControls() {
             traceState.attribute = select.value || null;
             clearTraceHighlights();
         });
+
+        // Show/hide origins checkbox based on traces availability
+        const originsContainer = document.getElementById('show-origins-container');
+        const originsCheckbox = document.getElementById('show-origins');
+
+        if (window.SchGraphApp.state.traces) {
+            originsContainer.classList.remove('d-none');
+
+            // Remove old listener if it exists
+            originsCheckbox.removeEventListener('change', handleOriginsChange);
+            // Add new listener
+            originsCheckbox.addEventListener('change', handleOriginsChange);
+        } else {
+            originsContainer.classList.add('d-none');
+            traceState.showOrigins = false;
+            originsCheckbox.checked = false;
+        }
     }
 
     /**
      * Perform trace for clicked element
      */
     function performTrace(element) {
-        if (!traceState.attribute) return;
-
         const cy = window.SchGraphApp.viz?.getCy?.();
         if (!cy) return;
 
-        const clickedData = element.data();
-        const traceValue = clickedData[traceState.attribute];
-
-        if (traceValue === undefined || traceValue === null) {
-            console.log(`No value for attribute "${traceState.attribute}" in clicked element`);
-            return;
-        }
-
         // Clear previous highlights
         clearTraceHighlights();
+        traceState.currentPaths = [];
+        traceState.currentPathIndex = 0;
 
-        // Convert trace value to string for contains check
-        const traceValueStr = String(traceValue)
-                .toLowerCase()
-                .replace(/[^a-zA-Z0-9\s\-_]/g, ' ')  // Replace special chars with spaces
-                .replace(/\s+/g, ' ')                 // Collapse multiple spaces
-                .trim();
+        if (traceState.showOrigins && element.isEdge()) {
+            // Origins mode - trace message paths
+            const msgId = element.data('msg_id');
+            console.log('Tracing origins for edge with msg_id:', msgId);
 
-        if (traceValueStr === '') {
-            return;
-        }
-
-        // Find all elements with matching value
-        const matchingElements = cy.elements().filter(el => {
-            const elValue = el.data()[traceState.attribute];
-
-            if (elValue === undefined || elValue === null) {
-                return false;
+            if (msgId === undefined || msgId === null) {
+                console.log('Edge has no msg_id attribute');
+                return;
             }
 
-            // Convert to string and check if it contains the trace value
-            const elValueStr = String(elValue)
-                .toLowerCase()
-                .replace(/[^a-zA-Z0-9\s\-_]/g, ' ')  // Replace special chars with spaces
-                .replace(/\s+/g, ' ')                 // Collapse multiple spaces
-                .trim();
-            return elValueStr.includes(traceValueStr);
+            if (!window.SchGraphApp.state.traces) {
+                console.log('No traces data available');
+                return;
+            }
+
+            const paths = window.SchGraphApp.state.traces[String(msgId)];
+            if (!paths || paths.length === 0) {
+                console.log(`No paths found for msg_id ${msgId}`);
+                return;
+            }
+
+            traceState.currentPaths = paths;
+            highlightPaths(paths);
+
+            // Update edge details to show path navigation if this edge is selected
+            if (window.SchGraphApp.state.selectedEdge === element.data('id')) {
+                updateEdgeDetailsWithPaths();
+            }
+        } else if (traceState.attribute) {
+            // Normal attribute tracing
+            const clickedData = element.data();
+            const traceValue = clickedData[traceState.attribute];
+
+            if (traceValue === undefined || traceValue === null || traceValue === '') {
+                console.log(`No value for attribute "${traceState.attribute}" in clicked element`);
+                return;
+            }
+
+            // Check for empty arrays/objects
+            if ((Array.isArray(traceValue) && traceValue.length === 0) ||
+                (typeof traceValue === 'string' && traceValue.trim() === '')) {
+                console.log(`Empty value for attribute "${traceState.attribute}" in clicked element`);
+                return;
+            }
+
+            // Convert trace value to string for contains check
+            const traceValueStr = String(traceValue)
+                    .toLowerCase()
+                    .replace(/[^a-zA-Z0-9\s\-_]/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+
+            if (traceValueStr === '') {
+                return;
+            }
+
+            // Find all elements with matching value
+            const matchingElements = cy.elements().filter(el => {
+                const elValue = el.data()[traceState.attribute];
+
+                if (elValue === undefined || elValue === null) {
+                    return false;
+                }
+
+                const elValueStr = String(elValue)
+                    .toLowerCase()
+                    .replace(/[^a-zA-Z0-9\s\-_]/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                return elValueStr.includes(traceValueStr);
+            });
+
+            // Apply highlight
+            matchingElements.addClass('trace-highlight');
+
+            console.log(`Tracing ${traceState.attribute}="${traceValue}": found ${matchingElements.length} matches`);
+        }
+    }
+
+    /**
+     * Highlight paths with primary and secondary styling
+     */
+    function highlightPaths(paths) {
+        const cy = window.SchGraphApp.viz?.getCy?.();
+        if (!cy) return;
+
+        // Clear any existing secondary highlights
+        cy.edges().removeClass('trace-highlight-secondary');
+
+        paths.forEach((path, pathIndex) => {
+            // Highlight all edges in this path
+            path.forEach(msgId => {
+                // Find edges with this msg_id
+                cy.edges().forEach(edge => {
+                    const edgeMsgId = edge.data('msg_id');
+                    if (edgeMsgId !== undefined && edgeMsgId !== null && edgeMsgId == msgId) {
+                        if (pathIndex === traceState.currentPathIndex) {
+                            edge.addClass('trace-highlight');
+                        } else {
+                            edge.addClass('trace-highlight-secondary');
+                        }
+                    }
+                });
+            });
         });
 
-        // Apply highlight
-        matchingElements.addClass('trace-highlight');
-
-        console.log(`Tracing ${traceState.attribute}="${traceValue}": found ${matchingElements.length} matches`);
+        console.log(`Highlighted ${paths.length} paths for message origins`);
     }
+
+    /**
+     * Update edge details panel with path navigation
+     */
+    function updateEdgeDetailsWithPaths() {
+        const detailsContent = document.getElementById('node-details-content');
+        if (!detailsContent || traceState.currentPaths.length === 0) return;
+
+        // Add path navigation at the top of details
+        const pathNavHTML = `
+            <div class="path-navigation mb-3 p-2 bg-light rounded">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>Path ${traceState.currentPathIndex + 1} of ${traceState.currentPaths.length}</span>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" onclick="window.navigatePath(-1)" 
+                                ${traceState.currentPathIndex === 0 ? 'disabled' : ''}>
+                            <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="window.navigatePath(1)"
+                                ${traceState.currentPathIndex === traceState.currentPaths.length - 1 ? 'disabled' : ''}>
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                <small class="text-muted d-block mt-1">
+                    Message IDs: ${traceState.currentPaths[traceState.currentPathIndex].join(' → ')}
+                </small>
+            </div>
+        `;
+
+        // Prepend navigation to existing content
+        const existingContent = detailsContent.innerHTML;
+        detailsContent.innerHTML = pathNavHTML + existingContent;
+    }
+
+    /**
+     * Navigate between paths
+     */
+    window.navigatePath = function(direction) {
+        traceState.currentPathIndex += direction;
+        traceState.currentPathIndex = Math.max(0, Math.min(traceState.currentPathIndex, traceState.currentPaths.length - 1));
+
+        // Re-highlight with new primary path
+        clearTraceHighlights();
+        highlightPaths(traceState.currentPaths);
+
+        // Update the navigation UI
+        updateEdgeDetailsWithPaths();
+    };
 
     /**
      * Clear all trace highlights
@@ -314,7 +457,7 @@ function initializeUIControls() {
         const cy = window.SchGraphApp.viz?.getCy?.();
         if (!cy) return;
 
-        cy.elements().removeClass('trace-highlight');
+        cy.elements().removeClass('trace-highlight trace-highlight-secondary');
     }
 
     /**

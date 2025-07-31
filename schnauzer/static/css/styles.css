@@ -316,6 +316,31 @@ body {
     z-index: 1000;
 }
 
+/* Secondary path highlighting (for alternative paths) */
+#graph-container .trace-highlight-secondary {
+    border-width: 3px !important;
+    border-color: #e74c3c !important;
+    border-opacity: 0.4 !important;
+    z-index: 999;
+}
+
+#graph-container edge.trace-highlight-secondary {
+    line-color: #e74c3c !important;
+    target-arrow-color: #e74c3c !important;
+    width: 3px !important;
+    opacity: 0.4 !important;
+    z-index: 999;
+}
+
+/* Path navigation styling */
+.path-navigation {
+    border: 1px solid #dee2e6;
+}
+
+.path-navigation .btn-group-sm .btn {
+    padding: 0.125rem 0.5rem;
+}
+
 /* Node description formatting */
 .node-description {
     white-space: pre-wrap;

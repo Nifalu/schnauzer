@@ -17,6 +17,7 @@ function initializeApp() {
     // Global state variables
     app.state = {
         currentGraph: null,
+        traces: null,
         selectedNode: null,
         selectedEdge: null,
         tooltipTimeout: null,
@@ -81,6 +82,7 @@ function initializeApp() {
                 app.viz.stopCurrentLayout();
             }
             app.state.currentGraph = gdata;
+            app.state.traces = gdata.traces || null;
             app.viz.updateGraph(gdata);
             updateGraphStats(gdata);
             document.title = gdata.title || 'Graph Visualisation';
@@ -195,7 +197,8 @@ function initializeApp() {
             })
             .then(graph => {
                 app.state.currentGraph = graph;
-
+                app.state.traces = graph.traces || null;  // <-- Add this line!
+                
                 // Update page title if provided in graph data
                 if (graph.title) {
                     document.title = graph.title;

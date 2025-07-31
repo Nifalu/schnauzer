@@ -168,6 +168,17 @@ function initializeVisualization() {
                             'width': 5,
                         }
                     },
+                    {
+                        selector: 'edge.trace-highlight-secondary',
+                        style: {
+                            'line-color': '#e74c3c',
+                            'target-arrow-color': '#e74c3c',
+                            'source-arrow-color': '#e74c3c',
+                            'width': 3,
+                            'opacity': 0.4,
+                            'z-index': 999
+                        }
+                    },
                 ],
 
                 // Layout options
@@ -248,7 +259,7 @@ function initializeVisualization() {
             const edge = evt.target;
             const data = edge.data();
 
-            if (window.traceState && window.traceState.attribute) {
+            if (window.traceState && (window.traceState.attribute || window.traceState.showOrigins)) {
                 window.performTrace(edge);
             }
 

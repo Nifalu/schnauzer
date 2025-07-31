@@ -280,6 +280,10 @@ function initializeUIControls() {
                 .replace(/\s+/g, ' ')                 // Collapse multiple spaces
                 .trim();
 
+        if (traceValueStr === '') {
+            return;
+        }
+
         // Find all elements with matching value
         const matchingElements = cy.elements().filter(el => {
             const elValue = el.data()[traceState.attribute];

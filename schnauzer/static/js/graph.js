@@ -273,6 +273,11 @@ function initializeVisualization() {
 
             // Format and display edge details
             app.elements.nodeDetailsContent.innerHTML = window.SchGraphApp.utils.formatEdgeDetails(data);
+
+            // Add path navigation if in origins mode and paths exist
+            if (window.traceState && window.traceState.showOrigins && window.traceState.currentPaths.length > 0) {
+                window.updateEdgeDetailsWithPaths();
+            }
         });
 
         // Background click - hide details

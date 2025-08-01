@@ -314,7 +314,7 @@ function initializeUIControls() {
             }
 
             traceState.currentPaths = paths;
-            highlightPaths(paths);
+            highlightPaths(traceState.currentPaths, element);
 
             // Update edge details to show path navigation if this edge is selected
             if (window.SchGraphApp.state.selectedEdge === element.data('id')) {
@@ -374,31 +374,100 @@ function initializeUIControls() {
     /**
      * Highlight paths with primary and secondary styling
      */
-    function highlightPaths(paths) {
+    function highlightPaths(paths, clickedEdge) {
         const cy = window.SchGraphApp.viz?.getCy?.();
         if (!cy) return;
 
-        // Clear any existing secondary highlights
-        cy.edges().removeClass('trace-highlight-secondary');
+        // Clear any existing highlights
+        cy.edges().removeClass('trace-highlight trace-highlight-secondary');
 
-        paths.forEach((path, pathIndex) => {
-            // Highlight all edges in this path
-            path.forEach(msgId => {
-                // Find edges with this msg_id
-                cy.edges().forEach(edge => {
-                    const edgeMsgId = edge.data('msg_id');
-                    if (edgeMsgId !== undefined && edgeMsgId !== null && edgeMsgId == msgId) {
-                        if (pathIndex === traceState.currentPathIndex) {
-                            edge.addClass('trace-highlight');
-                        } else {
-                            edge.addClass('trace-highlight-secondary');
-                        }
-                    }
-                });
+        // If no clicked edge provided, try to get the selected one
+        if (!clickedEdge && window.SchGraphApp.state.selectedEdge) {
+            clickedEdge = cy.edges().filter(edge => edge.data('id') === window.SchGraphApp.state.selectedEdge)[0];
+        }
+
+        if (!clickedEdge) {
+            console.log('No edge to trace from');
+            return;
+        }
+
+        // First pass: Mark ALL edges in ALL paths as secondary
+        paths.forEach((path) => {
+            const pathEdges = tracePathBackwards(path, clickedEdge, cy);
+            pathEdges.forEach(edge => {
+                edge.addClass('trace-highlight-secondary');
             });
         });
 
+        // Second pass: Mark edges in the current path as primary (overwrites secondary)
+        if (paths[traceState.currentPathIndex]) {
+            const currentPathEdges = tracePathBackwards(paths[traceState.currentPathIndex], clickedEdge, cy);
+            currentPathEdges.forEach(edge => {
+                edge.removeClass('trace-highlight-secondary');
+                edge.addClass('trace-highlight');
+            });
+        }
+
         console.log(`Highlighted ${paths.length} paths for message origins`);
+    }
+
+    /**
+     * Trace backwards from the clicked edge following the path
+     */
+    function tracePathBackwards(path, startEdge, cy) {
+        const pathEdges = [];
+
+        // Always include the clicked edge - it's the endpoint of the trace
+        pathEdges.push(startEdge);
+
+        // Build a map of which component consumed which messages to produce which output
+        const productionMap = new Map(); // Key: "component|output_msg_id", Value: Set of consumed_msg_ids
+
+        path.forEach(([msgId, componentName, consumedIds]) => {
+            if (componentName && consumedIds) {
+                const key = `${componentName}|${msgId}`;
+                productionMap.set(key, new Set(consumedIds.map(id => Number(id))));
+            }
+        });
+
+        // Find all edges that are part of this path
+        cy.edges().forEach(edge => {
+            // Skip the start edge (already added)
+            if (edge === startEdge) return;
+
+            const edgeMsgId = Number(edge.data('msg_id'));
+            const edgeSource = edge.source().data('name');
+            const edgeTarget = edge.target().data('name');
+
+            // Check if this edge represents a message being consumed
+            // Look for any production where this edge's target consumed this edge's msg_id
+            const productionKey = `${edgeTarget}|*`;
+
+            // Check all productions by the target component
+            for (const [key, consumedIds] of productionMap) {
+                const [component, outputMsgId] = key.split('|');
+
+                // If this edge goes TO the component that consumed this message
+                if (component === edgeTarget && consumedIds.has(edgeMsgId)) {
+                    // Verify this edge is from the correct source
+                    // Find the producer of this message in the path
+                    let correctSource = false;
+                    for (const [pathMsgId, pathComponent, _] of path) {
+                        if (Number(pathMsgId) === edgeMsgId && pathComponent === edgeSource) {
+                            correctSource = true;
+                            break;
+                        }
+                    }
+
+                    if (correctSource) {
+                        pathEdges.push(edge);
+                        break; // Found it, no need to check other productions
+                    }
+                }
+            }
+        });
+
+        return pathEdges;
     }
 
     /**
@@ -408,9 +477,23 @@ function initializeUIControls() {
         const detailsContent = document.getElementById('node-details-content');
         if (!detailsContent || traceState.currentPaths.length === 0) return;
 
-        // Add path navigation at the top of details
+        // Format the path with component names and consumed info
+        const currentPath = traceState.currentPaths[traceState.currentPathIndex];
+        const pathStr = currentPath.map(([msgId, component, consumedIds]) => {
+            if (component) {
+                if (consumedIds && consumedIds.length > 0) {
+                    return `${component}(${msgId})[←${consumedIds.join(',')}]`;
+                } else {
+                    return `${component}(${msgId})`;
+                }
+            } else {
+                return `source(${msgId})`;
+            }
+        }).join(' → ');
+
+        // Create path navigation HTML
         const pathNavHTML = `
-            <div class="path-navigation mb-3 p-2 bg-light rounded">
+            <div class="path-navigation mb-3 p-2 bg-light rounded" id="path-navigation-container">
                 <div class="d-flex justify-content-between align-items-center">
                     <span>Path ${traceState.currentPathIndex + 1} of ${traceState.currentPaths.length}</span>
                     <div class="btn-group btn-group-sm">
@@ -425,15 +508,23 @@ function initializeUIControls() {
                     </div>
                 </div>
                 <small class="text-muted d-block mt-1">
-                    Message IDs: ${traceState.currentPaths[traceState.currentPathIndex].join(' → ')}
+                    Path: ${pathStr}
                 </small>
             </div>
         `;
 
-        // Prepend navigation to existing content
-        const existingContent = detailsContent.innerHTML;
-        detailsContent.innerHTML = pathNavHTML + existingContent;
+        // Check if path navigation already exists
+        const existingNav = detailsContent.querySelector('#path-navigation-container');
+        if (existingNav) {
+            // Replace existing navigation
+            existingNav.outerHTML = pathNavHTML;
+        } else {
+            // Insert at the beginning
+            detailsContent.insertAdjacentHTML('afterbegin', pathNavHTML);
+        }
     }
+
+    window.updateEdgeDetailsWithPaths = updateEdgeDetailsWithPaths;
 
     /**
      * Navigate between paths
@@ -444,7 +535,15 @@ function initializeUIControls() {
 
         // Re-highlight with new primary path
         clearTraceHighlights();
-        highlightPaths(traceState.currentPaths);
+
+        // Get the currently selected edge
+        const cy = window.SchGraphApp.viz?.getCy?.();
+        if (cy && window.SchGraphApp.state.selectedEdge) {
+            const selectedEdge = cy.edges().filter(edge => edge.data('id') === window.SchGraphApp.state.selectedEdge)[0];
+            if (selectedEdge) {
+                highlightPaths(traceState.currentPaths, selectedEdge);
+            }
+        }
 
         // Update the navigation UI
         updateEdgeDetailsWithPaths();

@@ -30,6 +30,7 @@ function initializeUIControls() {
     window.addEventListener('graphUpdated', () => {
         setupSearch()
         initializeTrace();
+        setupUnconstrainedRunFilter()
     });
 
     // Set up force controls
@@ -199,6 +200,60 @@ function initializeUIControls() {
             });
         }
     }
+
+
+    function setupUnconstrainedRunFilter() {
+        const checkbox = document.getElementById('hide-unconstrained-run');
+        const container = document.getElementById('hide-unconstrained-container');
+
+        if (!checkbox || !container) return;
+
+        // Always show the checkbox container
+        container.classList.remove('d-none');
+
+        console.log("Is this run?")
+        // Hide unconstrained edges by default
+        const cy = window.SchGraphApp.viz?.getCy?.();
+        if (cy) {
+            let unconstrainedCount = 0;
+            cy.edges().forEach(edge => {
+                if (edge.data('from_unconstrained_run') === true) {
+                    edge.addClass('hidden-unconstrained');
+                    unconstrainedCount++;
+                }
+            });
+            console.log(`Initially hid ${unconstrainedCount} unconstrained edges out of ${cy.edges().length} total edges`);
+        }
+
+
+        // Set up the event handler
+        checkbox.addEventListener('change', function() {
+            const cy = window.SchGraphApp.viz?.getCy?.();
+            if (!cy) {
+                console.log('Cytoscape instance not found');
+                return;
+            }
+
+            if (this.checked) {
+                // Show all edges
+                cy.edges().removeClass('hidden-unconstrained');
+                console.log('Showing all edges');
+            } else {
+                // Hide edges from unconstrained runs
+                let hiddenCount = 0;
+                cy.edges().forEach(edge => {
+                    if (edge.data('from_unconstrained_run') === true) {
+                        edge.addClass('hidden-unconstrained');
+                        hiddenCount++;
+                    }
+                });
+                console.log(`Hid ${hiddenCount} unconstrained edges`);
+            }
+        });
+    }
+
+
+
 
     const traceState = {
         attribute: null,
@@ -477,19 +532,33 @@ function initializeUIControls() {
         const detailsContent = document.getElementById('node-details-content');
         if (!detailsContent || traceState.currentPaths.length === 0) return;
 
+        // Get the selected edge to find its target
+        const cy = window.SchGraphApp.viz?.getCy?.();
+        let targetNodeName = null;
+        if (cy && window.SchGraphApp.state.selectedEdge) {
+            const selectedEdge = cy.edges().filter(edge => edge.data('id') === window.SchGraphApp.state.selectedEdge)[0];
+            if (selectedEdge) {
+                targetNodeName = selectedEdge.target().data('name');
+            }
+        }
+
         // Format the path with component names and consumed info
         const currentPath = traceState.currentPaths[traceState.currentPathIndex];
+
+        // Use the compact format: Component(inputs→output)
         const pathStr = currentPath.map(([msgId, component, consumedIds]) => {
-            if (component) {
-                if (consumedIds && consumedIds.length > 0) {
-                    return `${component}(${msgId})[←${consumedIds.join(',')}]`;
-                } else {
-                    return `${component}(${msgId})`;
-                }
+            if (!component) return `src(${msgId})`;
+
+            if (consumedIds && consumedIds.length > 0) {
+                // Show inputs explicitly
+                return `${component}(${consumedIds.join(',')}→${msgId})`;
             } else {
-                return `source(${msgId})`;
+                return `${component}(→${msgId})`;
             }
-        }).join(' → ');
+        }).join(', ');
+
+        // Add the destination if we have it
+        const fullPathStr = targetNodeName ? `${pathStr} → ${targetNodeName}` : pathStr;
 
         // Create path navigation HTML
         const pathNavHTML = `
@@ -508,7 +577,7 @@ function initializeUIControls() {
                     </div>
                 </div>
                 <small class="text-muted d-block mt-1">
-                    Path: ${pathStr}
+                    Path: ${fullPathStr}
                 </small>
             </div>
         `;

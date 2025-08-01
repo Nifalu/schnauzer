@@ -179,6 +179,12 @@ function initializeVisualization() {
                             'z-index': 999
                         }
                     },
+                    {
+                        selector: '.hidden-unconstrained',
+                        style: {
+                            'display': 'none'
+                        }
+                    },
                 ],
 
                 // Layout options

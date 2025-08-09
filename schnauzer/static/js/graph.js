@@ -1,708 +1,440 @@
-// graph.js - Core graph visualization using Cytoscape.js
+/**
+ * graph.js - Cytoscape graph rendering
+ * Handles graph initialization, rendering, layouts, and viewport management
+ */
 
-function initializeVisualization() {
-    const app = window.SchGraphApp;
-    let cy; // Cytoscape instance
-
-    let layoutState = {
-        name: 'fcose',  // Default layout
-        stop: null      // Only store the stop function
-    };
-
-    let currentForces = {
-        springLength: 200,
-        springCoeff: 0.0001,
-        mass: 4,
-        gravity: -0.8
-    };
-
-    // Helper function to format labels with line breaks
-    function formatLabel(name) {
-        if (!name) return '';
-
-        if (name.length <= 16) {
-            return name;
-        } else {
-            // For names longer than 16 chars
-            let processedName = name;
-            if (name.length > 32) {
-                processedName = name.substring(0, 32);
-            }
-
-            // Split into two lines at the middle
-            const midPoint = Math.floor(processedName.length / 2);
-            // Try to find a good break point (space, dash, underscore)
-            let breakPoint = midPoint;
-            for (let i = midPoint; i >= Math.max(0, midPoint - 8); i--) {
-                if (processedName[i] === ' ' || processedName[i] === '-' || processedName[i] === '_') {
-                    breakPoint = i;
-                    break;
-                }
-            }
-
-            if (breakPoint === midPoint) {
-                // No good break point found, just split at middle
-                return processedName.substring(0, midPoint) + '\n' + processedName.substring(midPoint);
-            } else {
-                // Split at the break point
-                return processedName.substring(0, breakPoint) + '\n' + processedName.substring(breakPoint + 1);
-            }
-        }
+export class Graph {
+    constructor(state, ui) {
+        this.state = state;
+        this.ui = ui;
+        this.cy = null;
     }
 
-    // Initialize Cytoscape
-    function initCytoscape() {
-        cy = cytoscape({
-            container: document.getElementById('graph-container'),
-
-            style: [
-                // Default node styling
-                {
-                    selector: 'node',
-                    style: {
-                        'background-color': 'data(color)',
-                        'label': function(ele) {
-                            return formatLabel(ele.data('name'));
-                        },
-                        'text-valign': 'center',
-                        'text-halign': 'center',
-                        'text-wrap': 'wrap',
-                        'text-max-width': '100px',
-                        'width': 'label',
-                        'height': function(ele) {
-                            const name = ele.data('name') || '';
-                            return name.length > 16 ? 40 : 25; // Taller for two-line labels
-                        },
-                        'padding': 10,
-                        'shape': 'roundrectangle',
-                        'border-width': 1,
-                        'border-color': '#fff',
-                        'font-size': 14,
-                        'color': function(ele) {
-                            return window.SchGraphApp.utils.getTextColor(ele.data('color') || '#999');
-                        }
-                    }
-                },
-
-                // Default edge styling
-                {
-                    selector: 'edge',
-                    style: {
-                        'width': 2,
-                        'line-color': 'data(color)',
-                        'target-arrow-color': 'data(color)',
-                        'target-arrow-shape': 'triangle',
-                        'curve-style': 'bezier',
-                        'control-point-step-size': 40,
-                        'label': function(ele) {
-                            return formatLabel(ele.data('name'));
-                        },
-                        'font-size': 10,
-                        'text-rotation': 'autorotate',
-                        'text-margin-y': -10
-                    }
-                },
-
-                // Multi-edge handling
-                {
-                    selector: 'edge.multiple',
-                    style: {
-                        'curve-style': 'bezier',
-                        'control-point-step-size': 40
-                    }
-                },
-
-                // Selected node/edge styling
-                {
-                    selector: ':selected',
-                    style: {
-                        'border-width': 4,
-                        'border-color': '#007bff'
-                    }
-                },
-
-                // Hover effects
-                {
-                    selector: 'node:active',
-                    style: {
-                        'overlay-padding': 10,
-                        'overlay-opacity': 0.2
-                    }
-                },
-
-                // Search highlighting
-                {
-                    selector: '.dimmed',
-                    style: {
-                        'opacity': 0.2
-                    }
-                },
-                {
-                    selector: '.highlighted',
-                    style: {
-                        'opacity': 1,
-                        'z-index': 999
-                    }
-                }
-            ],
-
-            // Layout options
-            layout: {
-                name: layoutState.name
-            },
-
-            // Interaction options
-            minZoom: 0.1,
-            maxZoom: 4,
-            wheelSensitivity: 0.2
-        });
-
-        // Set up event handlers
-        setupEventHandlers();
-
-        return cy;
-    }
-
-    // Set up event handlers for nodes and edges
-    function setupEventHandlers() {
-        const tooltip = document.querySelector(".graph-tooltip");
-        let tooltipTimeout;
-        let hoveredElement = null; // Track what element is currently hovered
-
-        // Helper function to show tooltip
-        function showTooltip(html, x, y) {
-            clearTimeout(tooltipTimeout);
-            tooltip.innerHTML = html;
-            tooltip.style.left = x + "px";
-            tooltip.style.top = y + "px";
-            tooltip.style.opacity = "0.95";
-        }
-
-        // Helper function to hide tooltip
-        function hideTooltip() {
-            hoveredElement = null;
-            tooltipTimeout = setTimeout(() => {
-                tooltip.style.opacity = "0";
-            }, 100);
-        }
-
-        // Node click - show details panel
-        cy.on('tap', 'node', function(evt) {
-            const node = evt.target;
-            const data = node.data();
-
-            // Update selected state
-            app.state.selectedNode = data.id;
-            app.state.selectedEdge = null;
-
-            // Show details panel
-            app.elements.nodeDetails.classList.remove('d-none');
-            app.elements.nodeDetailsTitle.textContent = data.name || "Node Details";
-
-            // Apply colors to header
-            const headerEl = app.elements.nodeDetails.querySelector('.card-header');
-            if (headerEl) {
-                headerEl.style.backgroundColor = data.color || '#999';
-                headerEl.style.color = window.SchGraphApp.utils.getTextColor(data.color || '#999');
+    init() {
+        const container = this.ui.elements.graphContainer;
+        if (!container) {
+            console.error('Graph container not found');
+            if (this.ui) {
+                this.ui.showStatus('Error: Graph container not found', 'error');
             }
-
-            // Format and display node details
-            app.elements.nodeDetailsContent.innerHTML = window.SchGraphApp.utils.formatNodeDetails(data);
-        });
-
-        // Edge click - show details panel
-        cy.on('tap', 'edge', function(evt) {
-            const edge = evt.target;
-            const data = edge.data();
-
-            // Update selected state
-            app.state.selectedEdge = data.id;
-            app.state.selectedNode = null;
-
-            // Show details panel
-            app.elements.nodeDetails.classList.remove('d-none');
-            app.elements.nodeDetailsTitle.textContent = data.name || "Edge Details";
-
-            // Format and display edge details
-            app.elements.nodeDetailsContent.innerHTML = window.SchGraphApp.utils.formatEdgeDetails(data);
-        });
-
-        // Background click - hide details
-        cy.on('tap', function(evt) {
-            if (evt.target === cy) {
-                app.elements.nodeDetails.classList.add('d-none');
-                app.state.selectedNode = null;
-                app.state.selectedEdge = null;
-            }
-        });
-
-        // Hover tooltips for nodes
-        cy.on('mouseover', 'node', function(evt) {
-            const node = evt.target;
-            const data = node.data();
-            const container = cy.container();
-            const containerRect = container.getBoundingClientRect();
-            hoveredElement = node;
-
-            // Build tooltip content with truncated name
-            const fullName = data.name || "Node";
-            let displayName = fullName;
-
-            if (fullName.length > 16) {
-                let processedName = fullName;
-                if (fullName.length > 32) {
-                    processedName = fullName.substring(0, 32);
-                }
-
-                // Split into two lines
-                const midPoint = Math.floor(processedName.length / 2);
-                let breakPoint = midPoint;
-                for (let i = midPoint; i >= Math.max(0, midPoint - 8); i--) {
-                    if (processedName[i] === ' ' || processedName[i] === '-' || processedName[i] === '_') {
-                        breakPoint = i;
-                        break;
-                    }
-                }
-
-                if (breakPoint === midPoint) {
-                    displayName = processedName.substring(0, midPoint) + '<br>' + processedName.substring(midPoint);
-                } else {
-                    displayName = processedName.substring(0, breakPoint) + '<br>' + processedName.substring(breakPoint + 1);
-                }
-            }
-
-            let html = `<h4>${displayName}</h4>`;
-
-            // Add parents if available
-            if (data.parents && Array.isArray(data.parents) && data.parents.length > 0) {
-                const parentNames = data.parents.map(p => {
-                    if (typeof p === 'object' && p.name) return p.name;
-                    if (typeof p === 'object' && p.id) return p.id;
-                    return String(p);
-                });
-                html += `<p><strong>Parents:</strong> ${escapeHTML(parentNames.join(', '))}</p>`;
-            }
-
-            // Add children if available
-            if (data.children && Array.isArray(data.children) && data.children.length > 0) {
-                const childNames = data.children.map(c => {
-                    if (typeof c === 'object' && c.name) return c.name;
-                    if (typeof c === 'object' && c.id) return c.id;
-                    return String(c);
-                });
-                html += `<p><strong>Children:</strong> ${escapeHTML(childNames.join(', '))}</p>`;
-            }
-
-            // Add description if available
-            if (data.description && data.description.trim() !== '') {
-                const desc = data.description.length > 150 ?
-                    data.description.substring(0, 147) + "..." :
-                    data.description;
-                html += `<hr><h6>Description</h6><div class="node-description">${escapeHTML(desc)}</div>`;
-            }
-
-            // Position and show tooltip
-            showTooltip(
-                html,
-                evt.renderedPosition.x + containerRect.left + 15,
-                evt.renderedPosition.y + containerRect.top - 30
-            );
-        });
-
-        // Hover tooltips for edges
-        cy.on('mouseover', 'edge', function(evt) {
-            const edge = evt.target;
-            const data = edge.data();
-            hoveredElement = edge;
-
-            const container = cy.container();
-            const containerRect = container.getBoundingClientRect();
-
-            // Build tooltip content
-            let html = `<h4>${escapeHTML(data.name || "Edge")}</h4>`;
-            html += `<p><strong>From:</strong> ${escapeHTML(edge.source().data('name'))}</p>`;
-            html += `<p><strong>To:</strong> ${escapeHTML(edge.target().data('name'))}</p>`;
-
-            // Position and show tooltip (using rendered coordinates)
-            showTooltip(
-                html,
-                evt.renderedPosition.x + containerRect.left + 15,
-                evt.renderedPosition.y + containerRect.top - 30
-            );
-        });
-
-        // Mouse move - update tooltip position when hovering
-        cy.on('mousemove', function(evt) {
-            if (hoveredElement && !app.state.isMouseDown && tooltip.style.opacity !== "0") {
-                const container = cy.container();
-                const containerRect = container.getBoundingClientRect();
-
-                // Update tooltip position to follow cursor
-                tooltip.style.left = (evt.renderedPosition.x + containerRect.left + 15) + "px";
-                tooltip.style.top = (evt.renderedPosition.y + containerRect.top - 30) + "px";
-            }
-        });
-
-        // Track mouse down/up state to hide tooltip when dragging
-        cy.on('mousedown', function(evt) {
-            app.state.isMouseDown = true;
-            if (hoveredElement) {
-                hideTooltip();
-            }
-        });
-
-        cy.on('mouseup', function(evt) {
-            app.state.isMouseDown = false;
-        });
-
-
-        cy.on('mouseout', 'node', function(evt) {
-            hideTooltip();
-        });
-
-        // Hide tooltip when mouse leaves edges
-        cy.on('mouseout', 'edge', function(evt) {
-            hideTooltip();
-        });
-    }
-
-    function updateGraph(graphData) {
-        if (!cy) {
-            cy = initCytoscape();
-        }
-
-        // Stop any running layout
-        if (layoutState.stop) {
-            layoutState.stop();
-            layoutState.stop = null;
-        }
-
-        // Save current positions
-        const oldPositions = {};
-        cy.nodes().forEach(node => {
-            const pos = node.position();
-            oldPositions[node.id()] = { x: pos.x, y: pos.y };
-        });
-
-        // Extract new graph data
-        let newNodes = [];
-        let newEdges = [];
-
-        if (graphData.elements) {
-            newNodes = graphData.elements.nodes || [];
-            newEdges = graphData.elements.edges || [];
-        } else {
-            // Handle old format
-            newNodes = (graphData.nodes || []).map(node => ({
-                data: { id: node.name, ...node }
-            }));
-            newEdges = (graphData.edges || []).map(edge => ({
-                data: {
-                    id: `${edge.source}_${edge.target}_${Math.random()}`,
-                    source: edge.source,
-                    target: edge.target,
-                    ...edge
-                }
-            }));
-        }
-
-        // Create sets of IDs for comparison
-        const currentNodeIds = new Set(cy.nodes().map(n => n.id()));
-        const currentEdgeIds = new Set(cy.edges().map(e => e.id()));
-        const newNodeIds = new Set(newNodes.map(n => n.data.id));
-        const newEdgeIds = new Set(newEdges.map(e => e.data.id));
-
-        // Find differences
-        const nodesToRemove = [...currentNodeIds].filter(id => !newNodeIds.has(id));
-        const nodesToAdd = newNodes.filter(n => !currentNodeIds.has(n.data.id));
-        const nodesToUpdate = newNodes.filter(n => currentNodeIds.has(n.data.id));
-
-        const edgesToRemove = [...currentEdgeIds].filter(id => !newEdgeIds.has(id));
-        const edgesToAdd = newEdges.filter(e => !currentEdgeIds.has(e.data.id));
-
-        nodesToRemove.forEach(id => {
-            cy.getElementById(id).remove();
-        });
-
-        // Remove edges that are gone
-        edgesToRemove.forEach(id => {
-            cy.getElementById(id).remove();
-        });
-
-        // Update existing nodes (update their data but keep positions)
-        nodesToUpdate.forEach(nodeData => {
-            const existingNode = cy.getElementById(nodeData.data.id);
-            if (existingNode) {
-                // Update data while preserving position
-                const currentPos = existingNode.position();
-                existingNode.data(nodeData.data);
-                existingNode.position(currentPos);
-            }
-        });
-
-        // Add new nodes
-        nodesToAdd.forEach((nodeData) => {
-            const nodeId = nodeData.data.id;
-
-            // Find edges that connect to this new node
-            const incomingEdges = newEdges.filter(e => e.data.target === nodeId);
-            const parentIds = incomingEdges.map(e => e.data.source);
-
-            // Get existing parent nodes
-            const parentNodes = parentIds
-                .map(id => cy.getElementById(id))
-                .filter(node => node && node.length > 0);
-
-            if (parentNodes.length > 0) {
-                // Position below the average position of parents
-                let avgX = 0, avgY = 0;
-                parentNodes.forEach(parent => {
-                    const pos = parent.position();
-                    avgX += pos.x;
-                    avgY += pos.y;
-                });
-                nodeData.position = {
-                    x: avgX / parentNodes.length,
-                    y: (avgY / parentNodes.length) + 100  // 100 pixels below parents
-                };
-            } else {
-                // No parents - place at origin (layout will handle it)
-                nodeData.position = { x: 0, y: 0 };
-            }
-        });
-
-        cy.add(nodesToAdd);
-
-        // Add new edges
-        cy.add(edgesToAdd);
-
-        // Restore positions for nodes that existed before
-        cy.nodes().forEach(node => {
-            const nodeId = node.id();
-            if (oldPositions[nodeId]) {
-                node.position(oldPositions[nodeId]);
-            }
-        });
-        runLayout();
-    }
-
-    // Get layout options for different layout types
-    function getLayoutOptions(layoutType) {
-        const baseOptions = {
-            name: layoutType,
-            animate: true,
-            animationDuration: 1000,
-            fit: true,
-            padding: 50
-        };
-
-        // Layout-specific options
-        const layoutConfigs = {
-            'fcose': {
-                idealEdgeLength: 200,
-                nodeOverlap: 1,
-                nodeRepulsion: 2000,  // Much lower
-                numIter: 2500,
-                tile: true,
-                tilingPaddingVertical: 10,
-                tilingPaddingHorizontal: 10,
-                randomize: true,
-                quality: 'default'
-            },
-            'breadthfirst': {
-                directed: true,
-                spacingFactor: 1,
-                avoidOverlap: true,
-                circle: false,
-                grid: false,
-                maximal: false
-            },
-            'dagre': {
-                rankDir: 'TB', // Top to bottom
-                rankSep: 100,
-                nodeSep: 50,
-                edgeSep: 25,
-                ranker: 'network-simplex'
-            },
-            'circle': {
-                avoidOverlap: true,
-                avoidOverlapPadding: 30,
-                radius: function(){
-                    const nodeCount = cy.nodes().length;
-                    const minRadius = 50;
-                    const radiusPerNode = 5;
-                    return Math.max(minRadius, nodeCount * radiusPerNode);
-                },
-                startAngle: 0,
-                sweep: (() => {
-                    const nodeCount = cy.nodes().length;
-                    if (nodeCount <= 1) return 2 * Math.PI;
-                    // Leave a gap to prevent first and last node overlap
-                    return 2 * Math.PI * (nodeCount - 1) / nodeCount;
-                })(),
-                clockwise: true,
-            },
-            'concentric': {
-                minNodeSpacing: 80,
-                levelWidth: function() { return 2; },
-                concentric: function(node) {
-                    return node.degree();
-                }
-            },
-            'grid': {
-                avoidOverlap: true,
-                avoidOverlapPadding: 10,
-                condense: false
-            },
-        };
-
-        return Object.assign(baseOptions, layoutConfigs[layoutType] || {});
-    }
-
-    // Run the current layout
-    function runLayout() {
-        // Stop previous if exists
-        if (layoutState.stop) {
-            layoutState.stop();
-            layoutState.stop = null;
-        }
-
-        const layoutOptions = getLayoutOptions(layoutState.name);
-        setTimeout(() => {
-            const layout = cy.layout(layoutOptions);
-            layoutState.stop = () => layout.stop();
-            layout.run();
-        }, 100);
-    }
-
-    // Set layout by name
-    function setLayout(newLayoutName) {
-        layoutState.name = newLayoutName;
-        runLayout();
-
-        // Update UI to show current layout
-        const layoutDisplay = document.getElementById('current-layout');
-        if (layoutDisplay) {
-            const layoutNames = {
-                'fcose': 'fCoSE',
-                'breadthfirst': 'Tree',
-                'dagre': 'Dagre',
-                'klay': 'Klay',
-                'circle': 'Circle',
-                'concentric': 'Concentric',
-                'grid': 'Grid',
-            };
-            layoutDisplay.textContent = layoutNames[layoutState.name] || layoutState.name;
-        }
-    }
-
-    // Toggle between layouts
-    function toggleTreeLayout() {
-        layoutState.name = layoutState.name === 'cose' ? 'breadthfirst' : 'cose';
-        runLayout();
-        return layoutState.name === 'breadthfirst';
-    }
-
-    // Update force parameters
-    function updateForces(forces) {
-        // Only apply to physics layouts
-        if (!['fcose'].includes(layoutState.name)) {
             return;
         }
 
-        // Update current forces
-        Object.assign(currentForces, forces);
-
-        // Stop current layout if running
-        if (layoutState.stop) {
-            layoutState.stop();
-            layoutState.stop = null;
-        }
-
-        // For fCoSE, only handle spring length
-        if (layoutState.name === 'fcose' && forces.springLength !== undefined) {
-            const currentPositions = {};
-            cy.nodes().forEach(node => {
-                currentPositions[node.id()] = {
-                    x: node.position('x'),
-                    y: node.position('y')
-                };
+        try {
+            this.cy = cytoscape({
+                container: container,
+                style: this.getStyles(),
+                minZoom: 0.1,
+                maxZoom: 4,
+                wheelSensitivity: 0.2
             });
 
-            const options = getLayoutOptions(layoutState.name);
-            options.idealEdgeLength = forces.springLength;
+            this.state.setCy(this.cy);
 
-            options.randomize = false;
-            options.positions = node => {
-                const pos = currentPositions[node.id()];
-                return pos ? { x: pos.x, y: pos.y } : undefined;
-            };
-            options.fit = false;
-            options.animate = true;
-            options.animationDuration = 300;
-            options.animationEasing = 'ease-out';
-            options.numIter = 250;
+            // Setup window resize handler
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    if (this.cy && this.cy.nodes().length > 0) {
+                        this.ensureGraphVisible();
+                    }
+                }, 250);
+            });
 
-            const layout = cy.layout(options);
-            layoutState.stop = () => layout.stop();
-            layout.run();
+            return this.cy;
+        } catch (error) {
+            console.error('Failed to initialize Cytoscape:', error);
+            if (this.ui) {
+                this.ui.showStatus('Error: Failed to initialize graph', 'error');
+            }
+            return null;
         }
     }
 
-    // Reset zoom and center
-    function resetZoom() {
-        cy.fit(50); // 50px padding
+    getStyles() {
+        return [
+            {
+                selector: 'node',
+                style: {
+                    'background-color': 'data(color)',
+                    'label': (ele) => this.formatLabel(ele.data('name')),
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'text-wrap': 'wrap',
+                    'text-max-width': '100px',
+                    'width': 'label',
+                    'height': (ele) => {
+                        const name = ele.data('name') || '';
+                        return name.length > 12 ? 40 : 25;
+                    },
+                    'padding': 10,
+                    'shape': 'roundrectangle',
+                    'border-width': 1,
+                    'border-color': '#fff',
+                    'font-size': 14,
+                    'color': (ele) => this.ui.getTextColor(ele.data('color') || '#999')
+                }
+            },
+            {
+                selector: 'edge',
+                style: {
+                    'width': 2,
+                    'line-color': 'data(color)',
+                    'target-arrow-color': 'data(color)',
+                    'target-arrow-shape': 'triangle',
+                    'curve-style': 'bezier',
+                    'control-point-step-size': 20,
+                    'label': (ele) => this.formatLabel(ele.data('name')),
+                    'font-size': 10,
+                    'text-rotation': 'autorotate',
+                    'text-margin-y': -10
+                }
+            },
+            {
+                selector: ':selected',
+                style: {
+                    'border-width': 2,
+                    'border-color': '#007bff'
+                }
+            },
+            {
+                selector: '.dimmed',
+                style: { 'opacity': 0.2 }
+            },
+            {
+                selector: '.highlighted',
+                style: { 'opacity': 1, 'z-index': 999 }
+            },
+            {
+                selector: '.trace-highlight',
+                style: {
+                    'border-width': 3,
+                    'border-color': '#e74c3c',
+                    'z-index': 1000
+                }
+            },
+            {
+                selector: 'edge.trace-highlight',
+                style: {
+                    'line-color': '#e74c3c',
+                    'target-arrow-color': '#e74c3c',
+                    'width': 5
+                }
+            },
+            {
+                selector: 'edge.trace-highlight-secondary',
+                style: {
+                    'line-color': '#e74c3c',
+                    'target-arrow-color': '#e74c3c',
+                    'width': 3,
+                    'opacity': 0.4,
+                    'z-index': 999
+                }
+            },
+            {
+                selector: '.hidden',
+                style: {
+                    'display': 'none'
+                }
+            }
+        ];
     }
 
-    // Update graph statistics
-    function updateGraphStats() {
-        if (app.elements.nodeCountEl) {
-            app.elements.nodeCountEl.textContent = cy.nodes().length;
+    getAdjustedViewport() {
+        const rightPanelWidth = 300;
+        const topOffset = 80;
+        const bottomOffset = 80;
+        const leftOffset = 20;
+
+        return {
+            x1: leftOffset,
+            y1: topOffset,
+            x2: window.innerWidth - rightPanelWidth - 20,
+            y2: window.innerHeight - bottomOffset
+        };
+    }
+
+    getSmartLayoutOptions(layoutName) {
+        const viewport = this.getAdjustedViewport();
+        const nodeCount = this.cy?.nodes().length || 0;
+        const edgeCount = this.cy?.edges().length || 0;
+
+        // Base options
+        const baseOptions = {
+            name: layoutName,
+            animate: true,
+            animationDuration: 1000,
+            fit: false,
+            boundingBox: viewport
+        };
+
+        // Calculate graph properties
+        const avgDegree = nodeCount > 0 ? (2 * edgeCount) / nodeCount : 0;
+        const isSimpleGraph = avgDegree < 3; // Tree-like or simple
+
+        // Estimate depth for hierarchical layouts
+        let estimatedDepth = Math.ceil(Math.sqrt(nodeCount));
+        if (this.cy && (layoutName === 'dagre' || layoutName === 'breadthfirst')) {
+            // Find root nodes (no incoming edges)
+            const roots = this.cy.nodes().filter(n => n.indegree() === 0);
+            if (roots.length > 0) {
+                // Quick depth estimation: assume balanced tree
+                estimatedDepth = Math.ceil(Math.log2(nodeCount / roots.length + 1));
+            }
         }
-        if (app.elements.edgeCountEl) {
-            app.elements.edgeCountEl.textContent = cy.edges().length;
+
+        // Layout-specific smart parameters
+        switch (layoutName) {
+            case 'dagre':
+                // SUPER COMPACT for small graphs
+                // Your graph has 7 nodes - it should be tight!
+
+                // Scale based on node count but keep it VERY compact
+                let rankSep, nodeSep;
+
+                if (nodeCount <= 10) {
+                    // VERY tight for small graphs
+                    rankSep = 20;  // Minimal vertical spacing
+                    nodeSep = 8;   // Minimal horizontal spacing
+                } else if (nodeCount <= 30) {
+                    // Still tight for medium graphs
+                    rankSep = 30;
+                    nodeSep = 12;
+                } else {
+                    // Slightly more space for large graphs
+                    rankSep = 40;
+                    nodeSep = 15;
+                }
+
+                return {
+                    ...baseOptions,
+                    rankDir: 'TB',
+                    rankSep: rankSep,
+                    nodeSep: nodeSep,
+                    edgeSep: 3,  // Very tight edge separation
+                    ranker: 'tight-tree',
+                    align: 'UL'  // Up-left for maximum compactness
+                };
+
+            case 'breadthfirst':
+                return {
+                    ...baseOptions,
+                    directed: true,
+                    // Even tighter spacing for simple graphs
+                    spacingFactor: isSimpleGraph ? 0.6 : 1.0,  // Reduced from 0.75/1.25
+                    avoidOverlap: true,
+                    grid: false,
+                    maximal: false
+                };
+
+            case 'fcose':
+                return {
+                    ...baseOptions,
+                    idealEdgeLength: isSimpleGraph ? 100 : 200,
+                    nodeOverlap: 1,
+                    nodeRepulsion: isSimpleGraph ? 1000 : 2000,
+                    numIter: 2500,
+                    tile: true,
+                    tilingPaddingVertical: 10,
+                    tilingPaddingHorizontal: 10,
+                    randomize: true,
+                    quality: 'default'
+                };
+
+            case 'circle':
+                const viewportWidth = viewport.x2 - viewport.x1;
+                const viewportHeight = viewport.y2 - viewport.y1;
+                const minDimension = Math.min(viewportWidth, viewportHeight);
+
+                // Calculate optimal radius based on node count
+                // More nodes = need bigger circle
+                const nodeSpacing = 80; // Desired spacing between nodes
+                const circumference = nodeCount * nodeSpacing;
+                const calculatedRadius = circumference / (2 * Math.PI);
+
+                // Constrain to viewport
+                const radius = Math.min(
+                    minDimension * 0.4,  // Max 40% of viewport
+                    Math.max(calculatedRadius, 50)  // At least calculated or 50px
+                );
+
+                return {
+                    ...baseOptions,
+                    name: 'circle',
+                    radius: radius,
+                    // Don't specify sweep - let Cytoscape handle even distribution
+                    // This should automatically prevent overlap
+                    avoidOverlap: true,
+                    avoidOverlapPadding: 20,
+                    clockwise: true
+                };
+
+            case 'concentric':
+                return {
+                    ...baseOptions,
+                    minNodeSpacing: 50,  // Reduced from 80
+                    levelWidth: () => 2,
+                    concentric: (node) => node.degree(),
+                    startAngle: 0,
+                    sweep: 2 * Math.PI,
+                    clockwise: true,
+                    avoidOverlap: true,
+                    avoidOverlapPadding: 10
+                };
+
+            case 'grid':
+                return {
+                    ...baseOptions,
+                    avoidOverlap: true,
+                    avoidOverlapPadding: 10,
+                    condense: true,  // Changed to true for more compact grid
+                    rows: undefined,  // Let Cytoscape determine
+                    cols: undefined   // Let Cytoscape determine
+                };
+
+            default:
+                return baseOptions;
         }
     }
 
-    // Export graph as PNG
-    function exportAsPNG() {
-        const blob = cy.png({
+    ensureGraphVisible() {
+        if (!this.cy || this.cy.nodes().length === 0) return;
+
+        const bb = this.cy.elements().boundingBox();
+        const viewport = this.getAdjustedViewport();
+
+        const viewportWidth = viewport.x2 - viewport.x1;
+        const viewportHeight = viewport.y2 - viewport.y1;
+
+        const padding = 0.9;
+        const zoomX = (viewportWidth / bb.w) * padding;
+        const zoomY = (viewportHeight / bb.h) * padding;
+        let targetZoom = Math.min(zoomX, zoomY, 2.0);
+        targetZoom = Math.max(targetZoom, 0.1);
+
+        const bbCenterX = (bb.x1 + bb.x2) / 2;
+        const bbCenterY = (bb.y1 + bb.y2) / 2;
+        const viewportCenterX = (viewport.x1 + viewport.x2) / 2;
+        const viewportCenterY = (viewport.y1 + viewport.y2) / 2;
+
+        const targetPan = {
+            x: viewportCenterX - bbCenterX * targetZoom,
+            y: viewportCenterY - bbCenterY * targetZoom
+        };
+
+        this.cy.animate({
+            zoom: targetZoom,
+            pan: targetPan,
+            duration: 500,
+            easing: 'ease-in-out'
+        });
+    }
+
+    render(data) {
+        if (!this.cy) {
+            console.error('Cannot render: Cytoscape not initialized');
+            if (this.ui) {
+                this.ui.showStatus('Error: Graph not initialized', 'error');
+            }
+            return;
+        }
+
+        if (!data || !data.elements) {
+            console.error('Cannot render: invalid data structure');
+            if (this.ui) {
+                this.ui.showStatus('Error: Invalid graph data received', 'error');
+            }
+            return;
+        }
+
+        // Clear existing elements
+        this.cy.elements().remove();
+
+        // Check if we have any elements to add
+        const hasNodes = data.elements.nodes && data.elements.nodes.length > 0;
+        const hasEdges = data.elements.edges && data.elements.edges.length > 0;
+
+        if (!hasNodes && !hasEdges) {
+            console.log('Rendering empty graph');
+            return;
+        }
+
+        // Add new elements
+        try {
+            this.cy.add(data.elements);
+
+            // Run default layout with auto-fit
+            this.runLayoutWithFit('fcose');
+        } catch (error) {
+            console.error('Error rendering graph:', error);
+            if (this.ui) {
+                this.ui.showStatus('Error: Failed to render graph data', 'error');
+            }
+        }
+    }
+
+    runLayoutWithFit(layoutName, options = {}) {
+        if (!this.cy) return;
+
+        // Get smart layout options
+        const smartOptions = this.getSmartLayoutOptions(layoutName);
+
+        // Merge with any provided options
+        const layoutOptions = {
+            ...smartOptions,
+            ...options
+        };
+
+        const layout = this.cy.layout(layoutOptions);
+
+        // Fit after layout completes
+        layout.on('layoutstop', () => {
+            setTimeout(() => {
+                this.ensureGraphVisible();
+            }, 100);
+        });
+
+        layout.run();
+        return layout;
+    }
+
+    formatLabel(name) {
+        if (!name || name.length <= 16) return name || '';
+
+        let processedName = name.length > 32 ? name.substring(0, 32) : name;
+        const midPoint = Math.floor(processedName.length / 2);
+
+        // Try to find a good break point
+        for (let i = midPoint; i >= Math.max(0, midPoint - 8); i--) {
+            if (processedName[i] === ' ' || processedName[i] === '-' || processedName[i] === '_') {
+                return processedName.substring(0, i) + '\n' + processedName.substring(i + 1);
+            }
+        }
+
+        return processedName.substring(0, midPoint) + '\n' + processedName.substring(midPoint);
+    }
+
+    resetZoom() {
+        this.ensureGraphVisible();
+    }
+
+    exportAsPNG() {
+        if (!this.cy) return;
+
+        const blob = this.cy.png({
             output: 'blob',
             bg: '#f9f9f9',
-            scale: 2 // Higher resolution
+            scale: 2
         });
 
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.download = `${window.graphTitle || 'graph'}.png`;
+        a.download = `graph-${Date.now()}.png`;
         a.href = url;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }
-
-    // Initialize on first call
-    if (!cy) {
-        cy = initCytoscape();
-    }
-
-    function stopCurrentLayout() {
-        if (layoutState.stop) {
-            layoutState.stop();
-            layoutState.stop = null;
-        }
-    }
-
-    // Return public API
-    return {
-        updateGraph,
-        resetZoom,
-        toggleTreeLayout,
-        updateForces,
-        exportAsPNG,
-        setLayout,
-        stopCurrentLayout,
-        getCy: () => cy, // Expose cy instance for debugging
-    };
 }

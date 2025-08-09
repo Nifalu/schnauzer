@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='favicon/favicon-32x32.png') }}">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon/favicon-16x16.png') }}">
 
-    <!-- Bootstrap CSS from CDN -->
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
 
     <!-- Bootstrap Icons -->
@@ -19,182 +19,126 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
-    <div class="container-fluid py-4">
-        <h1 class="text-center mb-4">{{ title }}</h1>
+    <div class="graph-wrapper">
+        <!-- Graph container -->
+        <div id="graph-container"></div>
 
-        <div class="row">
-            <div class="col-md-9">
-                <!-- Graph visualization container -->
-                <div class="card mb-4">
-                    <div class="card-body p-0" id="graph-container">
-                        <div class="graph-controls">
-                            <div class="btn-group">
-                                <button id="reset-zoom" class="btn btn-sm btn-outline-secondary">Reset View</button>
+        <!-- Top left: Title -->
+        <div class="floating-panel top-left">
+            <h1 class="graph-title">{{ title }}</h1>
+        </div>
 
-                                <!-- Layout dropdown -->
-                                <div class="dropdown d-inline-block">
-                                    <button class="btn btn-sm btn-outline-primary dropdown-toggle" type="button" id="layoutDropdown" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="bi bi-diagram-3"></i> Layout: <span id="current-layout">fCose</span>
-                                    </button>
-                                    <ul class="dropdown-menu" aria-labelledby="layoutDropdown">
-                                        <li><h6 class="dropdown-header">Physics</h6></li>
-                                        <li><a class="dropdown-item layout-option" href="#" data-layout="fcose">fCose</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li><h6 class="dropdown-header">Hierarchical</h6></li>
-                                        <li><a class="dropdown-item layout-option" href="#" data-layout="breadthfirst">Breadth-First Tree</a></li>
-                                        <li><a class="dropdown-item layout-option" href="#" data-layout="dagre">Dagre (DAG)</a></li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li><h6 class="dropdown-header">Other</h6></li>
-                                        <li><a class="dropdown-item layout-option" href="#" data-layout="circle">Circle</a></li>
-                                        <li><a class="dropdown-item layout-option" href="#" data-layout="concentric">Concentric</a></li>
-                                        <li><a class="dropdown-item layout-option" href="#" data-layout="grid">Grid</a></li>
-                                    </ul>
-                                </div>
+        <!-- Status message -->
+        <div id="status-message" class="floating-panel status-panel alert d-none"></div>
 
-                                <button id="export-graph" class="btn btn-sm btn-outline-secondary">
-                                    <i class="bi bi-download"></i> Export
-                                </button>
-                            </div>
-                        </div>
-                        <!-- Cytoscape will render here -->
-                    </div>
+        <!-- Top center: Graph stats -->
+        <div class="floating-panel top-center">
+            <span>Nodes: <span id="node-count">0</span>, Edges: <span id="edge-count">0</span></span>
+        </div>
+
+        <!-- Top right: Search & Trace -->
+        <div class="floating-panel top-right">
+            <h5 class="panel-title">Search & Filter</h5>
+            <div class="panel-body">
+                <label for="trace-attribute" class="form-label small">Search Attribute:</label>
+                <div class="input-group mb-2">
+                    <input type="text" id="search-nodes" class="form-control form-control-sm" placeholder="Search...">
+                    <button class="btn btn-sm btn-outline-secondary" type="button" id="clear-search">
+                        <i class="bi bi-x"></i>
+                    </button>
                 </div>
-
-                <!-- Status message area -->
-                <div id="status-message" class="alert d-none"></div>
-            </div>
-
-            <div class="col-md-3">
-                <!-- Search box for nodes -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0">Search Nodes</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="input-group">
-                            <input type="text" id="search-nodes" class="form-control" placeholder="Search...">
-                            <button class="btn btn-outline-secondary" type="button" id="clear-search">
-                                <i class="bi bi-x"></i>
-                            </button>
-                        </div>
-                    </div>
+                <div class="mb-2">
+                    <label for="trace-attribute" class="form-label small">Trace Attribute:</label>
+                    <select id="trace-attribute" class="form-select form-select-sm">
+                        <option value="">No trace</option>
+                    </select>
                 </div>
-
-                <!-- Node details panel (initially hidden) -->
-                <div class="card mb-4 d-none" id="node-details">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0" id="node-details-title">Node Details</h5>
-                    </div>
-                    <div class="card-body" id="node-details-content">
-                        <!-- Content will be populated dynamically -->
-                    </div>
+                <div class="mb-2">
+                    <label for="filter-attribute" class="form-label small">Hide Attribute:</label>
+                    <select id="filter-attribute" class="form-select form-select-sm">
+                        <option value="">Show all</option>
+                    </select>
                 </div>
-
-                <!-- Graph information panel -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0">Graph Information</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="graph-stats">
-                            <h6>Statistics</h6>
-                            <ul class="list-group mb-3">
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Nodes
-                                    <span class="badge bg-primary rounded-pill" id="node-count">0</span>
-                                </li>
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    Edges
-                                    <span class="badge bg-primary rounded-pill" id="edge-count">0</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </div>
+                <div class="form-check mt-2 d-none" id="show-origins-container">
+                    <input class="form-check-input" type="checkbox" id="show-origins" value="">
+                    <label class="form-check-label small" for="show-origins">
+                        trace origins
+                    </label>
                 </div>
             </div>
         </div>
+
+        <!-- Right side: Node/Edge details panel -->
+        <div class="floating-panel right-side d-none" id="node-details">
+            <div class="panel-header">
+                <h5 class="mb-0" id="node-details-title">Details</h5>
+            </div>
+            <div class="panel-body" id="node-details-content">
+                <!-- Content populated dynamically -->
+            </div>
+        </div>
+
+        <!-- Bottom center: Spring length slider -->
+        <div class="floating-panel bottom-center d-none" id="spring-length-control">
+            <input type="range" class="form-range" id="spring-length-slider"
+                   min="50" max="400" step="10" value="200"
+                   data-bs-toggle="tooltip" data-bs-placement="top" title="Spring Length">
+            <span id="spring-length-value" class="ms-2">200</span>
+        </div>
+
+        <!-- Bottom right: Control buttons -->
+        <div class="floating-panel bottom-right">
+            <button id="reset-zoom" class="btn btn-sm btn-outline-secondary">Reset View</button>
+            <span class="divider">|</span>
+
+            <!-- Layout dropdown -->
+            <div class="dropdown d-inline-block">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                        id="layoutDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                    Layout: <span id="current-layout">fCoSE</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="layoutDropdown">
+                    <li><h6 class="dropdown-header">Physics</h6></li>
+                    <li><a class="dropdown-item layout-option" href="#" data-layout="fcose">fCoSE</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><h6 class="dropdown-header">Hierarchical</h6></li>
+                    <li><a class="dropdown-item layout-option" href="#" data-layout="breadthfirst">Breadth-First Tree</a></li>
+                    <li><a class="dropdown-item layout-option" href="#" data-layout="dagre">Dagre (DAG)</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><h6 class="dropdown-header">Other</h6></li>
+                    <li><a class="dropdown-item layout-option" href="#" data-layout="circle">Circle</a></li>
+                    <li><a class="dropdown-item layout-option" href="#" data-layout="concentric">Concentric</a></li>
+                    <li><a class="dropdown-item layout-option" href="#" data-layout="grid">Grid</a></li>
+                </ul>
+            </div>
+            <span class="divider">|</span>
+            <button id="export-graph" class="btn btn-sm btn-outline-secondary">Export</button>
+        </div>
     </div>
 
-    <!-- Graph tooltip div -->
+    <!-- Graph tooltip -->
     <div class="graph-tooltip" style="opacity: 0;"></div>
 
-    <!-- Socket.IO from CDN -->
+    <!-- Socket.IO -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
-    <!-- Bootstrap JS Bundle with Popper from CDN -->
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- Cytoscape.js -->
+    <!-- Cytoscape.js and extensions -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
 
-    <!-- Layout extensions - load in correct dependency order -->
-    <script>
-        // Create a promise that resolves when extensions are loaded
-        window.extensionsLoaded = new Promise((resolve) => {
-            // Load extensions in the correct order with dependencies
-            function loadScript(src) {
-                return new Promise((resolve, reject) => {
-                    const script = document.createElement('script');
-                    script.src = src;
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
-            }
+    <!-- Layout extensions -->
+    <script src="https://unpkg.com/layout-base@2.0.1/layout-base.js"></script>
+    <script src="https://unpkg.com/cose-base@2.2.0/cose-base.js"></script>
+    <script src="https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js"></script>
+    <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
 
-            // Load in sequence to handle dependencies
-            async function loadExtensions() {
-                try {
-                    // Load base dependencies first
-                    await loadScript('https://unpkg.com/layout-base@2.0.1/layout-base.js');
-                    await loadScript('https://unpkg.com/cose-base@2.2.0/cose-base.js');
-
-                    // Then load fcose which depends on the above
-                    await loadScript('https://unpkg.com/cytoscape-fcose@2.2.0/cytoscape-fcose.js');
-
-                    // Load other extensions
-                    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/dagre/0.8.5/dagre.min.js');
-                    await loadScript('https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js');
-
-                    console.log('All layout extensions loaded successfully');
-                    resolve();
-                } catch (error) {
-                    console.warn('Some layout extensions failed to load:', error);
-                    resolve(); // Resolve anyway to not block the app
-                }
-            }
-
-            loadExtensions();
-        });
-    </script>
-
-    <!-- Custom JavaScript for graph visualization (modular structure) -->
+    <!-- Keep utils.js for backward compatibility if needed -->
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/graph.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/ui-controls.js') }}"></script>
 
-    <!-- Pass title to JavaScript -->
-    <script>
-        // Store the graph title for use in JavaScript
-        window.graphTitle = "{{ title }}";
-
-        window.extensionsLoaded.then(() => {
-            console.log("Extensions loaded, now loading main.js");
-            // Now load main.js which will initialize everything
-            const script = document.createElement('script');
-            script.src = "{{ url_for('static', filename='js/main.js') }}";
-            document.body.appendChild(script);
-
-            script.onload = () => {
-                console.log("main.js loaded successfully");
-            };
-
-            script.onerror = (err) => {
-                console.error("Failed to load main.js:", err);
-            };
-        }).catch(err => {
-            console.error("Extensions loading failed:", err);
-        });
-    </script>
+    <!-- Main application - ES6 modules -->
+    <script type="module" src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

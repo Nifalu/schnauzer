@@ -77,7 +77,7 @@ class VisualizationClient:
         if hasattr(self, 'context') and self.context:
             self.context.term()
 
-    def send_graph(self, graph: networkx.Graph, title=None, traces=None):
+    def send_graph(self, graph: networkx.Graph, title=None, lineage=None):
         """Send networkx graph data to the visualization server."""
         if not self.connected:
             success = self._connect()
@@ -87,8 +87,8 @@ class VisualizationClient:
         # Convert to GraphML string using NetworkX built-in
         cytoscape_data = nx.cytoscape_data(graph)
         cytoscape_data['title'] = title or 'NetworkX Graph Visualization with Cytoscape'
-        if traces:
-            cytoscape_data['traces'] = traces
+        if lineage:
+            cytoscape_data['lineage'] = lineage
 
 
         try:

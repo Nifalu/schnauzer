@@ -30,7 +30,7 @@ function initializeUIControls() {
     window.addEventListener('graphUpdated', () => {
         setupSearch()
         initializeTrace();
-        setupUnconstrainedRunFilter()
+        initializeAttributeFilter()
     });
 
     // Set up force controls
@@ -252,6 +252,90 @@ function initializeUIControls() {
         });
     }
 
+    // Store filter state at module level
+    let filterState = {
+        hiddenAttribute: null,
+        initialized: false
+    };
+
+    /**
+     * Initialize attribute filter functionality
+     */
+    function initializeAttributeFilter() {
+        const cy = window.SchGraphApp.viz?.getCy?.();
+        if (!cy) {
+            console.log('No cytoscape instance available for filter initialization');
+            return;
+        }
+
+        // Discover all attributes in the graph
+        const attributes = new Set();
+
+        // Get attributes from all nodes
+        cy.nodes().forEach(node => {
+            Object.keys(node.data()).forEach(key => {
+                if (key !== 'id' && key !== 'name') {
+                    attributes.add(key);
+                }
+            });
+        });
+
+        // Get attributes from all edges
+        cy.edges().forEach(edge => {
+            Object.keys(edge.data()).forEach(key => {
+                if (key !== 'id' && key !== 'source' && key !== 'target') {
+                    attributes.add(key);
+                }
+            });
+        });
+
+        console.log(`Found ${attributes.size} filterable attributes:`, Array.from(attributes));
+
+        // Populate dropdown
+        const select = document.getElementById('filter-attribute');
+        if (!select) {
+            console.log('Filter dropdown not found');
+            return;
+        }
+
+        select.innerHTML = '<option value="">Show all</option>';
+
+        Array.from(attributes).sort().forEach(attr => {
+            const option = document.createElement('option');
+            option.value = attr;
+            option.textContent = `Hide: ${attr}`;
+            select.appendChild(option);
+        });
+
+        // Only set up listener once
+        if (!filterState.initialized) {
+            select.addEventListener('change', () => {
+                filterState.hiddenAttribute = select.value || null;
+                applyFilters();
+            });
+            filterState.initialized = true;
+        }
+
+        // Re-apply existing filter to the new graph
+        applyFilters();
+    }
+
+    function applyFilters() {
+        const cy = window.SchGraphApp.viz?.getCy?.();
+        if (!cy) return;
+
+        // First show all elements
+        cy.elements().style('display', 'element');
+
+        if (!filterState.hiddenAttribute) return;
+
+        // Hide elements that have the selected attribute
+        cy.elements().forEach(el => {
+            if (el.data(filterState.hiddenAttribute) !== undefined) {
+                el.style('display', 'none');
+            }
+        });
+    }
 
 
 

@@ -1,776 +1,200 @@
-// graph.js - Core graph visualization using Cytoscape.js
+/**
+ * graph.js - Cytoscape graph rendering
+ * Only handles Cytoscape initialization and rendering
+ */
 
-function initializeVisualization() {
-    const app = window.SchGraphApp;
-    let cy; // Cytoscape instance
-
-    let layoutState = {
-        name: 'fcose',  // Default layout
-        stop: null      // Only store the stop function
-    };
-
-    let currentForces = {
-        springLength: 200,
-        springCoeff: 0.0001,
-        mass: 4,
-        gravity: -0.8
-    };
-
-    // Helper function to format labels with line breaks
-    function formatLabel(name) {
-        if (!name) return '';
-
-        if (name.length <= 16) {
-            return name;
-        } else {
-            // For names longer than 16 chars
-            let processedName = name;
-            if (name.length > 32) {
-                processedName = name.substring(0, 32);
-            }
-
-            // Split into two lines at the middle
-            const midPoint = Math.floor(processedName.length / 2);
-            // Try to find a good break point (space, dash, underscore)
-            let breakPoint = midPoint;
-            for (let i = midPoint; i >= Math.max(0, midPoint - 8); i--) {
-                if (processedName[i] === ' ' || processedName[i] === '-' || processedName[i] === '_') {
-                    breakPoint = i;
-                    break;
-                }
-            }
-
-            if (breakPoint === midPoint) {
-                // No good break point found, just split at middle
-                return processedName.substring(0, midPoint) + '\n' + processedName.substring(midPoint);
-            } else {
-                // Split at the break point
-                return processedName.substring(0, breakPoint) + '\n' + processedName.substring(breakPoint + 1);
-            }
-        }
+export class Graph {
+    constructor(state, ui) {
+        this.state = state;
+        this.ui = ui;
+        this.cy = null;
     }
 
-    // Initialize Cytoscape
-    function initCytoscape() {
-        const container = document.getElementById('graph-container');
+    init() {
+        const container = this.ui.elements.graphContainer;
         if (!container) {
-            console.error('Graph container not found!');
-            return null;
-        }
-
-        try {
-            cy = cytoscape({
-                container: container,
-                style: [
-                    // Default node styling
-                    {
-                        selector: 'node',
-                        style: {
-                            'background-color': 'data(color)',
-                            'label': function(ele) {
-                                return formatLabel(ele.data('name'));
-                            },
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'text-wrap': 'wrap',
-                            'text-max-width': '100px',
-                            'width': 'label',
-                            'height': function(ele) {
-                                const name = ele.data('name') || '';
-                                return name.length > 12 ? 40 : 25; // Taller for two-line labels
-                            },
-                            'padding': 10,
-                            'shape': 'roundrectangle',
-                            'border-width': 1,
-                            'border-color': '#fff',
-                            'font-size': 14,
-                            'color': function(ele) {
-                                return window.SchGraphApp.utils.getTextColor(ele.data('color') || '#999');
-                            }
-                        }
-                    },
-
-                    // Default edge styling
-                    {
-                        selector: 'edge',
-                        style: {
-                            'width': 2,
-                            'line-color': 'data(color)',
-                            'target-arrow-color': 'data(color)',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'control-point-step-size': 20,
-                            'label': function(ele) {
-                                return formatLabel(ele.data('name'));
-                            },
-                            'font-size': 10,
-                            'text-rotation': 'autorotate',
-                            'text-margin-y': -10
-                        }
-                    },
-
-                    // Multi-edge handling
-                    {
-                        selector: 'edge.multiple',
-                        style: {
-                            'curve-style': 'bezier',
-                            'control-point-step-size': 20
-                        }
-                    },
-
-                    // Selected node/edge styling
-                    {
-                        selector: ':selected',
-                        style: {
-                            'border-width': 2,
-                            'border-color': '#007bff'
-                        }
-                    },
-
-                    // Hover effects
-                    {
-                        selector: 'node:active',
-                        style: {
-                            'overlay-padding': 2,
-                            'overlay-opacity': 0.1
-                        }
-                    },
-
-                    // Search highlighting
-                    {
-                        selector: '.dimmed',
-                        style: {
-                            'opacity': 0.2
-                        }
-                    },
-                    {
-                        selector: '.highlighted',
-                        style: {
-                            'opacity': 1,
-                            'z-index': 999
-                        }
-                    },
-                    {
-                        selector: '.trace-highlight',
-                        style: {
-                            'border-width': 3,
-                            'border-color': '#e74c3c',
-                            'border-opacity': 1,
-                            'z-index': 1000
-                        }
-                    },
-                    {
-                        selector: 'edge.trace-highlight',
-                        style: {
-                            'line-color': '#e74c3c',
-                            'target-arrow-color': '#e74c3c',
-                            'source-arrow-color': '#e74c3c',
-                            'width': 5,
-                        }
-                    },
-                    {
-                        selector: 'edge.trace-highlight-secondary',
-                        style: {
-                            'line-color': '#e74c3c',
-                            'target-arrow-color': '#e74c3c',
-                            'source-arrow-color': '#e74c3c',
-                            'width': 3,
-                            'opacity': 0.4,
-                            'z-index': 999
-                        }
-                    },
-                    {
-                        selector: '.hidden-unconstrained',
-                        style: {
-                            'display': 'none'
-                        }
-                    },
-                ],
-
-                // Layout options
-                layout: {
-                    name: layoutState.name
-                },
-
-                // Interaction options
-                minZoom: 0.1,
-                maxZoom: 4,
-                wheelSensitivity: 0.2
-            });
-
-            // Set up event handlers
-            setupEventHandlers();
-
-            return cy;
-        } catch (error) {
-            console.error('Error initializing Cytoscape:', error);
-            return null;
-        }
-    }
-
-    // Set up event handlers for nodes and edges
-    function setupEventHandlers() {
-        const tooltip = document.querySelector(".graph-tooltip");
-        let tooltipTimeout;
-        let hoveredElement = null; // Track what element is currently hovered
-
-        // Helper function to show tooltip
-        function showTooltip(html, x, y) {
-            clearTimeout(tooltipTimeout);
-            tooltip.innerHTML = html;
-            tooltip.style.left = x + "px";
-            tooltip.style.top = y + "px";
-            tooltip.style.opacity = "0.95";
-        }
-
-        // Helper function to hide tooltip
-        function hideTooltip() {
-            hoveredElement = null;
-            tooltipTimeout = setTimeout(() => {
-                tooltip.style.opacity = "0";
-            }, 100);
-        }
-
-        // Node click - show details panel
-        cy.on('tap', 'node', function(evt) {
-            const node = evt.target;
-            const data = node.data();
-
-            // Perform trace if enabled
-            if (window.traceState && window.traceState.attribute) {
-                window.performTrace(node);
-            }
-
-            // Update selected state
-            app.state.selectedNode = data.id;
-            app.state.selectedEdge = null;
-
-            // Show details panel
-            app.elements.nodeDetails.classList.remove('d-none');
-            app.elements.nodeDetailsTitle.textContent = data.name || "Node Details";
-
-            // Apply colors to header
-            const headerEl = app.elements.nodeDetails.querySelector('.card-header');
-            if (headerEl) {
-                headerEl.style.backgroundColor = data.color || '#999';
-                headerEl.style.color = window.SchGraphApp.utils.getTextColor(data.color || '#999');
-            }
-
-            // Format and display node details
-            app.elements.nodeDetailsContent.innerHTML = window.SchGraphApp.utils.formatNodeDetails(data);
-        });
-
-        // Edge click - show details panel
-        cy.on('tap', 'edge', function(evt) {
-            const edge = evt.target;
-            const data = edge.data();
-
-            if (window.traceState && (window.traceState.attribute || window.traceState.showOrigins)) {
-                window.performTrace(edge);
-            }
-
-            // Update selected state
-            app.state.selectedEdge = data.id;
-            app.state.selectedNode = null;
-
-            // Show details panel
-            app.elements.nodeDetails.classList.remove('d-none');
-            app.elements.nodeDetailsTitle.textContent = data.name || "Edge Details";
-
-            // Format and display edge details
-            app.elements.nodeDetailsContent.innerHTML = window.SchGraphApp.utils.formatEdgeDetails(data);
-
-            // Add path navigation if in origins mode and paths exist
-            if (window.traceState && window.traceState.showOrigins && window.traceState.currentPaths.length > 0) {
-                window.updateEdgeDetailsWithPaths();
-            }
-        });
-
-        // Background click - hide details
-        cy.on('tap', function(evt) {
-            if (evt.target === cy) {
-                app.elements.nodeDetails.classList.add('d-none');
-                app.state.selectedNode = null;
-                app.state.selectedEdge = null;
-            }
-        });
-
-        // Hover tooltips for nodes
-        cy.on('mouseover', 'node', function(evt) {
-            const node = evt.target;
-            const data = node.data();
-            const container = cy.container();
-            const containerRect = container.getBoundingClientRect();
-            hoveredElement = node;
-
-            // Build tooltip content with truncated name
-            const fullName = data.name || "Node";
-            let displayName = fullName;
-
-            if (fullName.length > 16) {
-                let processedName = fullName;
-                if (fullName.length > 32) {
-                    processedName = fullName.substring(0, 32);
-                }
-
-                // Split into two lines
-                const midPoint = Math.floor(processedName.length / 2);
-                let breakPoint = midPoint;
-                for (let i = midPoint; i >= Math.max(0, midPoint - 8); i--) {
-                    if (processedName[i] === ' ' || processedName[i] === '-' || processedName[i] === '_') {
-                        breakPoint = i;
-                        break;
-                    }
-                }
-
-                if (breakPoint === midPoint) {
-                    displayName = processedName.substring(0, midPoint) + '<br>' + processedName.substring(midPoint);
-                } else {
-                    displayName = processedName.substring(0, breakPoint) + '<br>' + processedName.substring(breakPoint + 1);
-                }
-            }
-
-            let html = `<h4>${displayName}</h4>`;
-
-            // Add description if available
-            if (data.description && data.description.trim() !== '') {
-                const desc = data.description.length > 150 ?
-                    data.description.substring(0, 147) + "..." :
-                    data.description;
-                html += `<div class="node-description">${escapeHTML(desc)}</div>`;
-            }
-
-            // Position and show tooltip
-            showTooltip(
-                html,
-                evt.renderedPosition.x + containerRect.left + 15,
-                evt.renderedPosition.y + containerRect.top - 30
-            );
-        });
-
-        // Hover tooltips for edges
-        cy.on('mouseover', 'edge', function(evt) {
-            const edge = evt.target;
-            const data = edge.data();
-            hoveredElement = edge;
-
-            const container = cy.container();
-            const containerRect = container.getBoundingClientRect();
-
-            const fullName = data.name || "Node";
-            let displayName = fullName;
-
-            if (fullName.length > 16) {
-                let processedName = fullName;
-                if (fullName.length > 32) {
-                    processedName = fullName.substring(0, 32);
-                }
-
-                // Split into two lines
-                const midPoint = Math.floor(processedName.length / 2);
-                let breakPoint = midPoint;
-                for (let i = midPoint; i >= Math.max(0, midPoint - 8); i--) {
-                    if (processedName[i] === ' ' || processedName[i] === '-' || processedName[i] === '_') {
-                        breakPoint = i;
-                        break;
-                    }
-                }
-
-                if (breakPoint === midPoint) {
-                    displayName = processedName.substring(0, midPoint) + '<br>' + processedName.substring(midPoint);
-                } else {
-                    displayName = processedName.substring(0, breakPoint) + '<br>' + processedName.substring(breakPoint + 1);
-                }
-            }
-
-            let html = `<h4>${displayName}</h4>`;
-
-            if (data.description && data.description.trim() !== '') {
-                const desc = data.description.length > 150 ?
-                    data.description.substring(0, 147) + "..." :
-                    data.description;
-                html += `<div class="node-description">${escapeHTML(desc)}</div>`;
-            }
-
-            // Position and show tooltip (using rendered coordinates)
-            showTooltip(
-                html,
-                evt.renderedPosition.x + containerRect.left + 15,
-                evt.renderedPosition.y + containerRect.top - 30
-            );
-        });
-
-        // Mouse move - update tooltip position when hovering
-        cy.on('mousemove', function(evt) {
-            if (hoveredElement && !app.state.isMouseDown && tooltip.style.opacity !== "0") {
-                const container = cy.container();
-                const containerRect = container.getBoundingClientRect();
-
-                // Update tooltip position to follow cursor
-                tooltip.style.left = (evt.renderedPosition.x + containerRect.left + 15) + "px";
-                tooltip.style.top = (evt.renderedPosition.y + containerRect.top - 30) + "px";
-            }
-        });
-
-        // Track mouse down/up state to hide tooltip when dragging
-        cy.on('mousedown', function(evt) {
-            app.state.isMouseDown = true;
-            if (hoveredElement) {
-                hideTooltip();
-            }
-        });
-
-        cy.on('mouseup', function(evt) {
-            app.state.isMouseDown = false;
-        });
-
-
-        cy.on('mouseout', 'node', function(evt) {
-            hideTooltip();
-        });
-
-        // Hide tooltip when mouse leaves edges
-        cy.on('mouseout', 'edge', function(evt) {
-            hideTooltip();
-        });
-    }
-
-    function updateGraph(graphData) {
-        if (!cy) {
-            cy = initCytoscape();
-            // If still no cy, something went wrong
-            if (!cy) {
-                console.error('Failed to initialize Cytoscape');
-                return;
-            }
-        }
-
-        if (!graphData || typeof graphData !== 'object') {
-            console.error('Invalid graph data:', graphData);
+            console.error('Graph container not found');
             return;
         }
 
-        // Stop any running layout
-        if (layoutState.stop) {
-            layoutState.stop();
-            layoutState.stop = null;
+        this.cy = cytoscape({
+            container: container,
+            style: this.getStyles(),
+            minZoom: 0.1,
+            maxZoom: 4,
+            wheelSensitivity: 0.2
+        });
+
+        this.state.setCy(this.cy);
+        return this.cy;
+    }
+
+    getStyles() {
+        return [
+            {
+                selector: 'node',
+                style: {
+                    'background-color': 'data(color)',
+                    'label': (ele) => this.formatLabel(ele.data('name')),
+                    'text-valign': 'center',
+                    'text-halign': 'center',
+                    'text-wrap': 'wrap',
+                    'text-max-width': '100px',
+                    'width': 'label',
+                    'height': (ele) => {
+                        const name = ele.data('name') || '';
+                        return name.length > 12 ? 40 : 25;
+                    },
+                    'padding': 10,
+                    'shape': 'roundrectangle',
+                    'border-width': 1,
+                    'border-color': '#fff',
+                    'font-size': 14,
+                    'color': (ele) => this.getTextColor(ele.data('color') || '#999')
+                }
+            },
+            {
+                selector: 'edge',
+                style: {
+                    'width': 2,
+                    'line-color': 'data(color)',
+                    'target-arrow-color': 'data(color)',
+                    'target-arrow-shape': 'triangle',
+                    'curve-style': 'bezier',
+                    'control-point-step-size': 20,
+                    'label': (ele) => this.formatLabel(ele.data('name')),
+                    'font-size': 10,
+                    'text-rotation': 'autorotate',
+                    'text-margin-y': -10
+                }
+            },
+            {
+                selector: ':selected',
+                style: {
+                    'border-width': 2,
+                    'border-color': '#007bff'
+                }
+            },
+            {
+                selector: '.dimmed',
+                style: { 'opacity': 0.2 }
+            },
+            {
+                selector: '.highlighted',
+                style: { 'opacity': 1, 'z-index': 999 }
+            },
+            {
+                selector: '.trace-highlight',
+                style: {
+                    'border-width': 3,
+                    'border-color': '#e74c3c',
+                    'z-index': 1000
+                }
+            },
+            {
+                selector: 'edge.trace-highlight',
+                style: {
+                    'line-color': '#e74c3c',
+                    'target-arrow-color': '#e74c3c',
+                    'width': 5
+                }
+            },
+            {
+                selector: 'edge.trace-highlight-secondary',
+                style: {
+                    'line-color': '#e74c3c',
+                    'target-arrow-color': '#e74c3c',
+                    'width': 3,
+                    'opacity': 0.4,
+                    'z-index': 999
+                }
+            }
+        ];
+    }
+
+    render(data) {
+        if (!this.cy || !data || !data.elements) {
+            console.error('Cannot render: missing cy or data');
+            return;
         }
 
         // Clear existing elements
-        cy.elements().remove();
+        this.cy.elements().remove();
 
-        // Add new elements - graphData should have 'elements' property from nx.cytoscape_data()
-        if (graphData.elements) {
-            cy.add(graphData.elements);
+        // Add new elements
+        this.cy.add(data.elements);
 
-            // Center all nodes at viewport center before layout
-            const centerX = (window.innerWidth - 300) / 2 ;  // Account for panels
-            const centerY = window.innerHeight / 2;
+        // Center nodes initially
+        const centerX = (window.innerWidth - 300) / 2;
+        const centerY = window.innerHeight / 2;
+        this.cy.nodes().positions({ x: centerX, y: centerY });
 
-            cy.nodes().positions({ x: centerX, y: centerY });
-
-            runLayout();
-            updateGraphStats();
-        } else {
-            console.error('No elements found in graph data:', graphData);
-        }
+        // Run default layout
+        this.runLayout('fcose');
     }
 
-    // Get layout options for different layout types
-    function getLayoutOptions(layoutType) {
-        const baseOptions = {
-            name: layoutType,
+    runLayout(layoutName, options = {}) {
+        if (!this.cy) return;
+
+        const layout = this.cy.layout({
+            name: layoutName,
             animate: true,
             animationDuration: 1000,
-            fit: false,
-            boundingBox: {
-                x1: 20,
-                y1: 100,
-                x2: window.innerWidth - 350,
-                y2: window.innerHeight - 100
-            }
-        };
+            fit: true,
+            padding: 50,
+            ...options
+        });
 
-        // Layout-specific options
-        const layoutConfigs = {
-            'fcose': {
-                idealEdgeLength: 200,
-                nodeOverlap: 1,
-                nodeRepulsion: 2000,  // Much lower
-                numIter: 2500,
-                tile: true,
-                tilingPaddingVertical: 10,
-                tilingPaddingHorizontal: 10,
-                randomize: true,
-                quality: 'default'
-            },
-            'breadthfirst': {
-                directed: true,
-                spacingFactor: 1,
-                avoidOverlap: true,
-                circle: false,
-                grid: false,
-                maximal: false
-            },
-            'dagre': {
-                rankDir: 'TB', // Top to bottom
-                rankSep: 100,
-                nodeSep: 50,
-                edgeSep: 25,
-                ranker: 'network-simplex'
-            },
-            'circle': {
-                avoidOverlap: true,
-                avoidOverlapPadding: 30,
-                radius: function(){
-                    const nodeCount = cy.nodes().length;
-                    const minRadius = 50;
-                    const radiusPerNode = 5;
-                    return Math.max(minRadius, nodeCount * radiusPerNode);
-                },
-                startAngle: 0,
-                sweep: (() => {
-                    const nodeCount = cy.nodes().length;
-                    if (nodeCount <= 1) return 2 * Math.PI;
-                    // Leave a gap to prevent first and last node overlap
-                    return 2 * Math.PI * (nodeCount - 1) / nodeCount;
-                })(),
-                clockwise: true,
-            },
-            'concentric': {
-                minNodeSpacing: 80,
-                levelWidth: function() { return 2; },
-                concentric: function(node) {
-                    return node.degree();
-                }
-            },
-            'grid': {
-                avoidOverlap: true,
-                avoidOverlapPadding: 10,
-                condense: false
-            },
-        };
-
-        return Object.assign(baseOptions, layoutConfigs[layoutType] || {});
-    }
-
-    function runLayout() {
-        // Stop previous if exists
-        if (layoutState.stop) {
-            layoutState.stop();
-            layoutState.stop = null;
-        }
-
-        const layoutOptions = getLayoutOptions(layoutState.name);
-        const layout = cy.layout(layoutOptions);
-        layoutState.stop = () => layout.stop();
-
-        // Get current zoom and pan for smooth transition
-        const startZoom = cy.zoom();
-        const startPan = cy.pan();
-        const zoomOutFactor = 0.8; // Zoom out to 60% of current
-
-        // Calculate viewport center
-        const viewportCenterX = window.innerWidth / 2 - 175; // Account for right panels
-        const viewportCenterY = window.innerHeight / 2;
-
-        // Calculate pan adjustment to keep zoom centered
-        const zoomRatio = zoomOutFactor;
-        const newPan = {
-            x: viewportCenterX - (viewportCenterX - startPan.x) * zoomRatio,
-            y: viewportCenterY - (viewportCenterY - startPan.y) * zoomRatio
-        };
-
-        // Start the layout
         layout.run();
-
-        // Phase 1: Zoom out during first 2/3 of animation (centered)
-        cy.animate({
-            zoom: startZoom * zoomOutFactor,
-            pan: newPan,
-            duration: layoutOptions.animationDuration * 0.4,
-            easing: 'ease-in-out'
-        });
-
-        // Phase 2: Start zoom-to-fit just before layout finishes
-        setTimeout(() => {
-            ensureGraphVisible();
-        }, layoutOptions.animationDuration * 0.95);
+        return layout;
     }
 
-    function ensureGraphVisible() {
-        // Get the bounding box of all elements
-        const bb = cy.elements().boundingBox();
+    formatLabel(name) {
+        if (!name || name.length <= 16) return name || '';
 
-        // Define the desired viewport
-        const viewport = {
-            x1: 20,
-            y1: 100,
-            x2: window.innerWidth - 350,
-            y2: window.innerHeight - 100
-        };
+        let processedName = name.length > 32 ? name.substring(0, 32) : name;
+        const midPoint = Math.floor(processedName.length / 2);
 
-        // Calculate the viewport dimensions
-        const viewportWidth = viewport.x2 - viewport.x1;
-        const viewportHeight = viewport.y2 - viewport.y1;
-
-        // Calculate required zoom to fit
-        const zoomX = viewportWidth / bb.w;
-        const zoomY = viewportHeight / bb.h;
-        const targetZoom = Math.min(zoomX, zoomY, cy.maxZoom()); // 0.9 for a bit of padding
-
-        // Calculate center of bounding box
-        const bbCenterX = (bb.x1 + bb.x2) / 2;
-        const bbCenterY = (bb.y1 + bb.y2) / 2;
-
-        // Calculate center of viewport
-        const viewportCenterX = (viewport.x1 + viewport.x2) / 2;
-        const viewportCenterY = (viewport.y1 + viewport.y2) / 2;
-
-        // Calculate required pan
-        const targetPan = {
-            x: viewportCenterX - bbCenterX * targetZoom,
-            y: viewportCenterY - bbCenterY * targetZoom
-        };
-
-        // Animate to the target position
-        cy.animate({
-            zoom: targetZoom,
-            pan: targetPan,
-            duration: 500,
-            easing: 'ease-in-out'
-        });
-    }
-    // Set layout by name
-    function setLayout(newLayoutName) {
-        layoutState.name = newLayoutName;
-        runLayout();
-
-        // Update UI to show current layout
-        const layoutDisplay = document.getElementById('current-layout');
-        if (layoutDisplay) {
-            const layoutNames = {
-                'fcose': 'fCoSE',
-                'breadthfirst': 'Tree',
-                'dagre': 'Dagre',
-                'klay': 'Klay',
-                'circle': 'Circle',
-                'concentric': 'Concentric',
-                'grid': 'Grid',
-            };
-            layoutDisplay.textContent = layoutNames[layoutState.name] || layoutState.name;
-        }
-    }
-
-    // Toggle between layouts
-    function toggleTreeLayout() {
-        layoutState.name = layoutState.name === 'cose' ? 'breadthfirst' : 'cose';
-        runLayout();
-        return layoutState.name === 'breadthfirst';
-    }
-
-    // Update force parameters
-    function updateForces(forces) {
-        // Only apply to physics layouts
-        if (!['fcose'].includes(layoutState.name)) {
-            return;
+        // Try to find a good break point
+        for (let i = midPoint; i >= Math.max(0, midPoint - 8); i--) {
+            if (processedName[i] === ' ' || processedName[i] === '-' || processedName[i] === '_') {
+                return processedName.substring(0, i) + '\n' + processedName.substring(i + 1);
+            }
         }
 
-        // Update current forces
-        Object.assign(currentForces, forces);
-
-        // Stop current layout if running
-        if (layoutState.stop) {
-            layoutState.stop();
-            layoutState.stop = null;
-        }
-
-        // For fCoSE, only handle spring length
-        if (layoutState.name === 'fcose' && forces.springLength !== undefined) {
-            const currentPositions = {};
-            cy.nodes().forEach(node => {
-                currentPositions[node.id()] = {
-                    x: node.position('x'),
-                    y: node.position('y')
-                };
-            });
-
-            const options = getLayoutOptions(layoutState.name);
-            options.idealEdgeLength = forces.springLength;
-
-            options.randomize = false;
-            options.positions = node => {
-                const pos = currentPositions[node.id()];
-                return pos ? { x: pos.x, y: pos.y } : undefined;
-            };
-            options.fit = false;
-            options.animate = true;
-            options.animationDuration = 300;
-            options.animationEasing = 'ease-out';
-            options.numIter = 250;
-
-            const layout = cy.layout(options);
-            layoutState.stop = () => layout.stop();
-            layout.run();
-        }
+        return processedName.substring(0, midPoint) + '\n' + processedName.substring(midPoint);
     }
 
-    // Reset zoom and center
-    function resetZoom() {
-        ensureGraphVisible()
+    getTextColor(bgColor) {
+        const color = bgColor.startsWith('#') ? bgColor.substring(1) : bgColor;
+        const r = parseInt(color.substring(0, 2), 16);
+        const g = parseInt(color.substring(2, 4), 16);
+        const b = parseInt(color.substring(4, 6), 16);
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        return luminance > 0.5 ? '#000000' : '#ffffff';
     }
 
-    // Update graph statistics
-    function updateGraphStats() {
-        if (app.elements.nodeCountEl) {
-            app.elements.nodeCountEl.textContent = cy.nodes().length;
-        }
-        if (app.elements.edgeCountEl) {
-            app.elements.edgeCountEl.textContent = cy.edges().length;
-        }
+    resetZoom() {
+        if (!this.cy) return;
+        this.cy.fit(null, 50);
     }
 
-    // Export graph as PNG
-    function exportAsPNG() {
-        const blob = cy.png({
+    exportAsPNG() {
+        if (!this.cy) return;
+
+        const blob = this.cy.png({
             output: 'blob',
             bg: '#f9f9f9',
-            scale: 2 // Higher resolution
+            scale: 2
         });
 
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.download = `${window.graphTitle || 'graph'}.png`;
+        a.download = `graph-${Date.now()}.png`;
         a.href = url;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     }
-
-    // Initialize on first call
-    if (!cy) {
-        cy = initCytoscape();
-    }
-
-    function stopCurrentLayout() {
-        if (layoutState.stop) {
-            layoutState.stop();
-            layoutState.stop = null;
-        }
-    }
-
-    // Return public API
-    return {
-        updateGraph,
-        resetZoom,
-        toggleTreeLayout,
-        updateForces,
-        exportAsPNG,
-        setLayout,
-        stopCurrentLayout,
-        getCy: () => cy, // Expose cy instance for debugging
-    };
 }
-
-window.initializeVisualization = initializeVisualization;

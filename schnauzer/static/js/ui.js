@@ -84,6 +84,25 @@ export class UI {
         if (fcoseOption) {
             fcoseOption.classList.add('active');
         }
+
+        // Setup expand/collapse for long values in details panel
+        if (this.elements.nodeDetailsContent) {
+            this.elements.nodeDetailsContent.addEventListener('click', (e) => {
+                if (e.target.classList.contains('expand-toggle')) {
+                    e.preventDefault();
+                    const action = e.target.dataset.action;
+                    const targetId = e.target.dataset.target;
+
+                    if (action === 'expand') {
+                        document.getElementById(targetId + '-short').style.display = 'none';
+                        document.getElementById(targetId + '-full').style.display = 'inline';
+                    } else {
+                        document.getElementById(targetId + '-short').style.display = 'inline';
+                        document.getElementById(targetId + '-full').style.display = 'none';
+                    }
+                }
+            });
+        }
     }
 
     showStatus(message, type = 'info', duration = 0) {
@@ -141,13 +160,8 @@ export class UI {
             header.style.color = this.getTextColor(node.color || '#999');
         }
 
-        // Use utils if available, otherwise simple display
-        if (window.SchGraphApp?.utils?.formatNodeDetails) {
-            this.elements.nodeDetailsContent.innerHTML =
-                window.SchGraphApp.utils.formatNodeDetails(node);
-        } else {
-            this.elements.nodeDetailsContent.innerHTML = this.formatDetails(node);
-        }
+        // Format details with proper handling
+        this.elements.nodeDetailsContent.innerHTML = this.formatDetails(node, 'node');
     }
 
     showEdgeDetails(edge) {
@@ -157,12 +171,15 @@ export class UI {
         panel.classList.remove('d-none');
         this.elements.nodeDetailsTitle.textContent = edge.name || 'Edge Details';
 
-        if (window.SchGraphApp?.utils?.formatEdgeDetails) {
-            this.elements.nodeDetailsContent.innerHTML =
-                window.SchGraphApp.utils.formatEdgeDetails(edge);
-        } else {
-            this.elements.nodeDetailsContent.innerHTML = this.formatDetails(edge);
+        // Apply edge color to header (same as for nodes)
+        const header = panel.querySelector('.panel-header');
+        if (header) {
+            header.style.backgroundColor = edge.color || '#999';
+            header.style.color = this.getTextColor(edge.color || '#999');
         }
+
+        // Format details with proper handling
+        this.elements.nodeDetailsContent.innerHTML = this.formatDetails(edge, 'edge');
     }
 
     hideDetails() {
@@ -171,15 +188,118 @@ export class UI {
         }
     }
 
-    formatDetails(data) {
-        // Simple fallback formatter
+    formatDetails(data, elementType = 'node') {
         let html = '';
-        for (const [key, value] of Object.entries(data)) {
-            if (key !== 'id' && value !== undefined && value !== null) {
-                html += `<p><strong>${key}:</strong> ${value}</p>`;
+
+        // 1. Description first (without label, styled differently)
+        if (data.description && data.description.trim() !== '') {
+            html += `<div class="mb-3 pb-2 border-bottom text-muted fst-italic">${this.escapeHTML(data.description)}</div>`;
+        }
+
+        // 2. Source and Target for edges (if present)
+        if (elementType === 'edge') {
+            if (data.source) {
+                html += `<p class="mb-1"><strong>Source:</strong> ${this.escapeHTML(data.source)}</p>`;
+            }
+            if (data.target) {
+                html += `<p class="mb-1"><strong>Target:</strong> ${this.escapeHTML(data.target)}</p>`;
             }
         }
-        return html;
+
+        // 3. Type if present
+        if (data.type) {
+            html += `<p class="mb-1"><strong>Type:</strong> ${this.escapeHTML(data.type)}</p>`;
+        }
+
+        // 4. Labels - handle them specially
+        if (data.labels) {
+            if (typeof data.labels === 'object' && !Array.isArray(data.labels)) {
+                // Object with key-value pairs
+                for (const [key, value] of Object.entries(data.labels)) {
+                    html += `<p class="mb-2"><strong>${this.escapeHTML(key)}:</strong> ${this.formatValue(value)}</p>`;
+                }
+            } else {
+                // Array or string
+                html += `<p class="mb-1"><strong>Labels:</strong> ${this.formatValue(data.labels)}</p>`;
+            }
+        }
+
+        // 5. Skip these special keys
+        const skipKeys = ['id', 'name', 'color', 'description', 'source', 'target', 'type', 'labels', 'x', 'y'];
+
+        // 6. All other attributes
+        for (const [key, value] of Object.entries(data)) {
+            if (!skipKeys.includes(key) && value !== undefined && value !== null) {
+                html += `<p class="mb-1"><strong>${this.escapeHTML(key)}:</strong> ${this.formatValue(value)}</p>`;
+            }
+        }
+
+        return html || '<p>No details available</p>';
+    }
+
+    formatValue(value) {
+        if (value === null || value === undefined) {
+            return '';
+        }
+
+        let fullText = '';
+
+        if (Array.isArray(value)) {
+            if (value.length === 0) return '[]';
+
+            // Format all array elements
+            const formatted = value.map(v => {
+                if (typeof v === 'object' && v !== null) {
+                    return JSON.stringify(v);
+                }
+                return String(v);
+            });
+
+            fullText = formatted.join(', ');
+        } else if (typeof value === 'object') {
+            // For objects, stringify compactly
+            fullText = JSON.stringify(value);
+        } else {
+            // For strings and primitives
+            fullText = String(value);
+        }
+
+        // If text is short enough, just return it
+        const maxLength = 150;
+        if (fullText.length <= maxLength) {
+            return this.escapeHTML(fullText);
+        }
+
+        // For long text, create expandable element
+        const truncated = fullText.substring(0, maxLength) + '...';
+        const uniqueId = 'expand-' + Math.random().toString(36).substr(2, 9);
+
+        return `
+            <span class="expandable-value">
+                <span id="${uniqueId}-short">
+                    ${this.escapeHTML(truncated)}
+                    <a href="#" class="expand-toggle text-primary text-decoration-none ms-1" 
+                       data-action="expand" data-target="${uniqueId}">[+]</a>
+                </span>
+                <span id="${uniqueId}-full" style="display: none; word-break: break-word;">
+                    ${this.escapeHTML(fullText)}
+                    <a href="#" class="expand-toggle text-primary text-decoration-none ms-1" 
+                       data-action="collapse" data-target="${uniqueId}">[-]</a>
+                </span>
+            </span>
+        `;
+    }
+
+    escapeHTML(str) {
+        if (str === null || str === undefined) return '';
+
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/\n/g, '<br>');  // Preserve line breaks in descriptions
     }
 
     getTextColor(bgColor) {

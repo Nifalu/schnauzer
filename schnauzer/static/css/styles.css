@@ -75,10 +75,10 @@ body {
 }
 
 .right-side {
-    top: 360px;
+    top: 350px;
     right: 20px;
     width: 280px;  /* Same as search panel */
-    max-height: calc(100vh - 400px);  /* Prevents overlap with bottom controls */
+    max-height: calc(100vh - 430px);  /* Prevents overlap with bottom controls */
     overflow: hidden;
     display: flex;
     flex-direction: column;

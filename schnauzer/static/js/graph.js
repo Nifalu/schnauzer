@@ -108,6 +108,12 @@ export class Graph {
                     'opacity': 0.4,
                     'z-index': 999
                 }
+            },
+            {
+                selector: '.hidden',
+                style: {
+                    'display': 'none'
+                }
             }
         ];
     }

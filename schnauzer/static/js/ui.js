@@ -47,6 +47,9 @@ export class UI {
             originsCheckbox: document.getElementById('show-origins'),
             originsContainer: document.getElementById('show-origins-container'),
 
+            // Filter
+            filterSelect: document.getElementById('filter-attribute'),
+
             // Spring control
             springSlider: document.getElementById('spring-length-slider'),
             springValue: document.getElementById('spring-length-value'),

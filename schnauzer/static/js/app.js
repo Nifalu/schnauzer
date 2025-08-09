@@ -9,6 +9,7 @@ import { LayoutManager } from './layouts.js';
 import { InteractionHandler } from './interactions.js';
 import { Search } from './search.js';
 import { Trace } from './trace.js';
+import { Filter } from './filter.js';
 import { Socket } from './socket.js';
 import { UI } from './ui.js';
 
@@ -22,6 +23,7 @@ class App {
         this.interactions = new InteractionHandler(this.state, this.ui, this.graph);
         this.search = new Search(this.state, this.graph);
         this.trace = new Trace(this.state, this.graph, this.ui);
+        this.filter = new Filter(this.state, this.graph);
         this.socket = new Socket(this.state, this.handleGraphUpdate.bind(this));
     }
 
@@ -49,6 +51,7 @@ class App {
         this.ui.updateTitle(data.title);
         this.search.reset();
         this.trace.reset();
+        this.filter.reset();
     }
 }
 

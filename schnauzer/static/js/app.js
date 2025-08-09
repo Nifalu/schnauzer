@@ -34,7 +34,7 @@ class App {
         this.ui.init();
 
         // Initialize graph
-        this.graph.init();
+        await this.graph.init();
 
         // Set up interactions
         this.interactions.init();
@@ -46,12 +46,17 @@ class App {
 
     handleGraphUpdate(data) {
         this.state.setGraphData(data);
-        this.graph.render(data);
+        this.graph.render(data);  // This now includes auto-fit
         this.ui.updateStats(data);
         this.ui.updateTitle(data.title);
         this.search.reset();
         this.trace.reset();
         this.filter.reset();
+
+        // Additional fit after all updates complete
+        setTimeout(() => {
+            this.graph.ensureGraphVisible();
+        }, 250);
     }
 }
 

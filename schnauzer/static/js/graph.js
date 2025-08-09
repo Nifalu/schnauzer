@@ -30,6 +30,18 @@ export class Graph {
             });
 
             this.state.setCy(this.cy);
+
+            // Setup window resize handler
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    if (this.cy && this.cy.nodes().length > 0) {
+                        this.ensureGraphVisible();
+                    }
+                }, 250);
+            });
+
             return this.cy;
         } catch (error) {
             console.error('Failed to initialize Cytoscape:', error);
@@ -129,6 +141,53 @@ export class Graph {
         ];
     }
 
+    getAdjustedViewport() {
+        const rightPanelWidth = 300;
+        const topOffset = 80;
+        const bottomOffset = 80;
+        const leftOffset = 20;
+
+        return {
+            x1: leftOffset,
+            y1: topOffset,
+            x2: window.innerWidth - rightPanelWidth - 20,
+            y2: window.innerHeight - bottomOffset
+        };
+    }
+
+    ensureGraphVisible() {
+        if (!this.cy || this.cy.nodes().length === 0) return;
+
+        const bb = this.cy.elements().boundingBox();
+        const viewport = this.getAdjustedViewport();
+
+        const viewportWidth = viewport.x2 - viewport.x1;
+        const viewportHeight = viewport.y2 - viewport.y1;
+
+        const padding = 0.9;
+        const zoomX = (viewportWidth / bb.w) * padding;
+        const zoomY = (viewportHeight / bb.h) * padding;
+        let targetZoom = Math.min(zoomX, zoomY, 2.0);
+        targetZoom = Math.max(targetZoom, 0.1);
+
+        const bbCenterX = (bb.x1 + bb.x2) / 2;
+        const bbCenterY = (bb.y1 + bb.y2) / 2;
+        const viewportCenterX = (viewport.x1 + viewport.x2) / 2;
+        const viewportCenterY = (viewport.y1 + viewport.y2) / 2;
+
+        const targetPan = {
+            x: viewportCenterX - bbCenterX * targetZoom,
+            y: viewportCenterY - bbCenterY * targetZoom
+        };
+
+        this.cy.animate({
+            zoom: targetZoom,
+            pan: targetPan,
+            duration: 500,
+            easing: 'ease-in-out'
+        });
+    }
+
     render(data) {
         if (!this.cy) {
             console.error('Cannot render: Cytoscape not initialized');
@@ -154,7 +213,6 @@ export class Graph {
         const hasEdges = data.elements.edges && data.elements.edges.length > 0;
 
         if (!hasNodes && !hasEdges) {
-            // Empty graph - this is OK, not an error
             console.log('Rendering empty graph');
             return;
         }
@@ -163,13 +221,8 @@ export class Graph {
         try {
             this.cy.add(data.elements);
 
-            // Center nodes initially
-            const centerX = (window.innerWidth - 300) / 2;
-            const centerY = window.innerHeight / 2;
-            this.cy.nodes().positions({ x: centerX, y: centerY });
-
-            // Run default layout
-            this.runLayout('fcose');
+            // Run default layout with auto-fit
+            this.runLayoutWithFit('fcose');
         } catch (error) {
             console.error('Error rendering graph:', error);
             if (this.ui) {
@@ -178,20 +231,36 @@ export class Graph {
         }
     }
 
-    runLayout(layoutName, options = {}) {
+    runLayoutWithFit(layoutName, options = {}) {
         if (!this.cy) return;
 
-        const layout = this.cy.layout({
+        const viewport = this.getAdjustedViewport();
+
+        const layoutOptions = {
             name: layoutName,
             animate: true,
             animationDuration: 1000,
-            fit: true,
-            padding: 50,
+            fit: false, // We'll fit manually after layout
+            boundingBox: viewport,
             ...options
+        };
+
+        const layout = this.cy.layout(layoutOptions);
+
+        // Set up layout stop handler to fit graph
+        layout.on('layoutstop', () => {
+            setTimeout(() => {
+                this.ensureGraphVisible();
+            }, 100);
         });
 
         layout.run();
         return layout;
+    }
+
+    runLayout(layoutName, options = {}) {
+        // Delegate to runLayoutWithFit for consistent behavior
+        return this.runLayoutWithFit(layoutName, options);
     }
 
     formatLabel(name) {
@@ -211,8 +280,7 @@ export class Graph {
     }
 
     resetZoom() {
-        if (!this.cy) return;
-        this.cy.fit(null, 50);
+        this.ensureGraphVisible();
     }
 
     exportAsPNG() {

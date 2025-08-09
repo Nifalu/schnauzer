@@ -1,7 +1,5 @@
-/**
- * layouts.js - Graph layout management
- * Handles all layout configurations and switching
- */
+// In schnauzer/static/js/layouts.js
+// Update the LayoutManager class to use utilities:
 
 export class LayoutManager {
     constructor(state, graph) {
@@ -26,7 +24,9 @@ export class LayoutManager {
         // Reset zoom button
         const resetBtn = document.getElementById('reset-zoom');
         if (resetBtn) {
-            resetBtn.addEventListener('click', () => this.graph.resetZoom());
+            resetBtn.addEventListener('click', () => {
+                this.graph.ensureGraphVisible();
+            });
         }
 
         // Export button
@@ -60,8 +60,8 @@ export class LayoutManager {
         // Get layout options
         const options = this.getLayoutOptions(layoutName);
 
-        // Run new layout
-        this.currentLayout = this.graph.runLayout(layoutName, options);
+        // Run new layout with auto-fit
+        this.currentLayout = this.graph.runLayoutWithFit(layoutName, options);
 
         // Update UI
         this.updateUI(layoutName);
@@ -69,76 +69,23 @@ export class LayoutManager {
     }
 
     getLayoutOptions(layoutName) {
+        // Try to use utils first
+        const viewport = this.graph.getAdjustedViewport();
+
         const baseOptions = {
             animate: true,
             animationDuration: 1000,
             fit: false,
-            boundingBox: {
-                x1: 20,
-                y1: 100,
-                x2: window.innerWidth - 350,
-                y2: window.innerHeight - 100
-            }
+            boundingBox: viewport
         };
 
-        const configs = {
-            'fcose': {
-                idealEdgeLength: 200,
-                nodeOverlap: 1,
-                nodeRepulsion: 2000,
-                numIter: 2500,
-                tile: true,
-                tilingPaddingVertical: 10,
-                tilingPaddingHorizontal: 10,
-                randomize: true,
-                quality: 'default'
-            },
-            'breadthfirst': {
-                directed: true,
-                spacingFactor: 1,
-                avoidOverlap: true,
-                circle: false,
-                grid: false,
-                maximal: false
-            },
-            'dagre': {
-                rankDir: 'TB',
-                rankSep: 100,
-                nodeSep: 50,
-                edgeSep: 25,
-                ranker: 'network-simplex'
-            },
-            'circle': {
-                avoidOverlap: true,
-                avoidOverlapPadding: 30,
-                radius: () => {
-                    const cy = this.state.get('cy');
-                    if (!cy) return 100;
-                    const nodeCount = cy.nodes().length;
-                    return Math.max(50, nodeCount * 5);
-                },
-                startAngle: 0,
-                sweep: () => {
-                    const cy = this.state.get('cy');
-                    if (!cy) return 2 * Math.PI;
-                    const nodeCount = cy.nodes().length;
-                    return nodeCount <= 1 ? 2 * Math.PI : 2 * Math.PI * (nodeCount - 1) / nodeCount;
-                },
-                clockwise: true
-            },
-            'concentric': {
-                minNodeSpacing: 80,
-                levelWidth: () => 2,
-                concentric: (node) => node.degree()
-            },
-            'grid': {
-                avoidOverlap: true,
-                avoidOverlapPadding: 10,
-                condense: false
-            }
+        // Fallback to basic options if utils not available
+        return {
+            name: layoutName,
+            animate: true,
+            animationDuration: 1000,
+            fit: false
         };
-
-        return Object.assign({}, baseOptions, configs[layoutName] || {});
     }
 
     updateSpringLength(value) {
@@ -162,7 +109,7 @@ export class LayoutManager {
         options.animationDuration = 300;
         options.numIter = 250;
 
-        this.currentLayout = this.graph.runLayout('fcose', options);
+        this.currentLayout = this.graph.runLayoutWithFit('fcose', options);
     }
 
     updateUI(layoutName) {

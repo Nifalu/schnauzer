@@ -24,7 +24,7 @@ class App {
         this.search = new Search(this.state, this.graph);
         this.trace = new Trace(this.state, this.graph, this.ui);
         this.filter = new Filter(this.state, this.graph);
-        this.socket = new Socket(this.state, this.handleGraphUpdate.bind(this));
+        this.socket = new Socket(this.state, this.handleGraphUpdate.bind(this), this.ui);
     }
 
     async init() {
@@ -34,7 +34,7 @@ class App {
         this.ui.init();
 
         // Initialize graph
-        await this.graph.init();
+        this.graph.init();
 
         // Set up interactions
         this.interactions.init();
@@ -46,7 +46,7 @@ class App {
 
     handleGraphUpdate(data) {
         this.state.setGraphData(data);
-        this.graph.render(data);  // This now includes auto-fit
+        this.graph.render(data);  // This now includes auto-fit via runLayoutWithFit
         this.ui.updateStats(data);
         this.ui.updateTitle(data.title);
         this.search.reset();
@@ -54,6 +54,7 @@ class App {
         this.filter.reset();
 
         // Additional fit after all updates complete
+        // Small delay to ensure all animations have started
         setTimeout(() => {
             this.graph.ensureGraphVisible();
         }, 250);

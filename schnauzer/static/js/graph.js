@@ -1,6 +1,6 @@
 /**
  * graph.js - Cytoscape graph rendering
- * Only handles Cytoscape initialization and rendering
+ * Handles graph initialization, rendering, layouts, and viewport management
  */
 
 export class Graph {
@@ -155,6 +155,149 @@ export class Graph {
         };
     }
 
+    getSmartLayoutOptions(layoutName) {
+        const viewport = this.getAdjustedViewport();
+        const nodeCount = this.cy?.nodes().length || 0;
+        const edgeCount = this.cy?.edges().length || 0;
+
+        // Base options
+        const baseOptions = {
+            name: layoutName,
+            animate: true,
+            animationDuration: 1000,
+            fit: false,
+            boundingBox: viewport
+        };
+
+        // Calculate graph properties
+        const avgDegree = nodeCount > 0 ? (2 * edgeCount) / nodeCount : 0;
+        const isSimpleGraph = avgDegree < 3; // Tree-like or simple
+
+        // Estimate depth for hierarchical layouts
+        let estimatedDepth = Math.ceil(Math.sqrt(nodeCount));
+        if (this.cy && (layoutName === 'dagre' || layoutName === 'breadthfirst')) {
+            // Find root nodes (no incoming edges)
+            const roots = this.cy.nodes().filter(n => n.indegree() === 0);
+            if (roots.length > 0) {
+                // Quick depth estimation: assume balanced tree
+                estimatedDepth = Math.ceil(Math.log2(nodeCount / roots.length + 1));
+            }
+        }
+
+        // Layout-specific smart parameters
+        switch (layoutName) {
+            case 'dagre':
+                // SUPER COMPACT for small graphs
+                // Your graph has 7 nodes - it should be tight!
+
+                // Scale based on node count but keep it VERY compact
+                let rankSep, nodeSep;
+
+                if (nodeCount <= 10) {
+                    // VERY tight for small graphs
+                    rankSep = 20;  // Minimal vertical spacing
+                    nodeSep = 8;   // Minimal horizontal spacing
+                } else if (nodeCount <= 30) {
+                    // Still tight for medium graphs
+                    rankSep = 30;
+                    nodeSep = 12;
+                } else {
+                    // Slightly more space for large graphs
+                    rankSep = 40;
+                    nodeSep = 15;
+                }
+
+                return {
+                    ...baseOptions,
+                    rankDir: 'TB',
+                    rankSep: rankSep,
+                    nodeSep: nodeSep,
+                    edgeSep: 3,  // Very tight edge separation
+                    ranker: 'tight-tree',
+                    align: 'UL'  // Up-left for maximum compactness
+                };
+
+            case 'breadthfirst':
+                return {
+                    ...baseOptions,
+                    directed: true,
+                    // Even tighter spacing for simple graphs
+                    spacingFactor: isSimpleGraph ? 0.6 : 1.0,  // Reduced from 0.75/1.25
+                    avoidOverlap: true,
+                    grid: false,
+                    maximal: false
+                };
+
+            case 'fcose':
+                return {
+                    ...baseOptions,
+                    idealEdgeLength: isSimpleGraph ? 100 : 200,
+                    nodeOverlap: 1,
+                    nodeRepulsion: isSimpleGraph ? 1000 : 2000,
+                    numIter: 2500,
+                    tile: true,
+                    tilingPaddingVertical: 10,
+                    tilingPaddingHorizontal: 10,
+                    randomize: true,
+                    quality: 'default'
+                };
+
+            case 'circle':
+                const viewportWidth = viewport.x2 - viewport.x1;
+                const viewportHeight = viewport.y2 - viewport.y1;
+                const minDimension = Math.min(viewportWidth, viewportHeight);
+
+                // Calculate optimal radius based on node count
+                // More nodes = need bigger circle
+                const nodeSpacing = 80; // Desired spacing between nodes
+                const circumference = nodeCount * nodeSpacing;
+                const calculatedRadius = circumference / (2 * Math.PI);
+
+                // Constrain to viewport
+                const radius = Math.min(
+                    minDimension * 0.4,  // Max 40% of viewport
+                    Math.max(calculatedRadius, 50)  // At least calculated or 50px
+                );
+
+                return {
+                    ...baseOptions,
+                    name: 'circle',
+                    radius: radius,
+                    // Don't specify sweep - let Cytoscape handle even distribution
+                    // This should automatically prevent overlap
+                    avoidOverlap: true,
+                    avoidOverlapPadding: 20,
+                    clockwise: true
+                };
+
+            case 'concentric':
+                return {
+                    ...baseOptions,
+                    minNodeSpacing: 50,  // Reduced from 80
+                    levelWidth: () => 2,
+                    concentric: (node) => node.degree(),
+                    startAngle: 0,
+                    sweep: 2 * Math.PI,
+                    clockwise: true,
+                    avoidOverlap: true,
+                    avoidOverlapPadding: 10
+                };
+
+            case 'grid':
+                return {
+                    ...baseOptions,
+                    avoidOverlap: true,
+                    avoidOverlapPadding: 10,
+                    condense: true,  // Changed to true for more compact grid
+                    rows: undefined,  // Let Cytoscape determine
+                    cols: undefined   // Let Cytoscape determine
+                };
+
+            default:
+                return baseOptions;
+        }
+    }
+
     ensureGraphVisible() {
         if (!this.cy || this.cy.nodes().length === 0) return;
 
@@ -234,20 +377,18 @@ export class Graph {
     runLayoutWithFit(layoutName, options = {}) {
         if (!this.cy) return;
 
-        const viewport = this.getAdjustedViewport();
+        // Get smart layout options
+        const smartOptions = this.getSmartLayoutOptions(layoutName);
 
+        // Merge with any provided options
         const layoutOptions = {
-            name: layoutName,
-            animate: true,
-            animationDuration: 1000,
-            fit: false, // We'll fit manually after layout
-            boundingBox: viewport,
+            ...smartOptions,
             ...options
         };
 
         const layout = this.cy.layout(layoutOptions);
 
-        // Set up layout stop handler to fit graph
+        // Fit after layout completes
         layout.on('layoutstop', () => {
             setTimeout(() => {
                 this.ensureGraphVisible();
@@ -256,11 +397,6 @@ export class Graph {
 
         layout.run();
         return layout;
-    }
-
-    runLayout(layoutName, options = {}) {
-        // Delegate to runLayoutWithFit for consistent behavior
-        return this.runLayoutWithFit(layoutName, options);
     }
 
     formatLabel(name) {

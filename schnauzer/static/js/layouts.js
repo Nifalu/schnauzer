@@ -1,5 +1,7 @@
-// In schnauzer/static/js/layouts.js
-// Update the LayoutManager class to use utilities:
+/**
+ * layouts.js - Graph layout management
+ * Handles all layout configurations and switching
+ */
 
 export class LayoutManager {
     constructor(state, graph) {
@@ -24,9 +26,7 @@ export class LayoutManager {
         // Reset zoom button
         const resetBtn = document.getElementById('reset-zoom');
         if (resetBtn) {
-            resetBtn.addEventListener('click', () => {
-                this.graph.ensureGraphVisible();
-            });
+            resetBtn.addEventListener('click', () => this.graph.resetZoom());
         }
 
         // Export button
@@ -57,7 +57,7 @@ export class LayoutManager {
             this.currentLayout.stop();
         }
 
-        // Get layout options
+        // Get layout options from graph's smart options
         const options = this.getLayoutOptions(layoutName);
 
         // Run new layout with auto-fit
@@ -69,23 +69,35 @@ export class LayoutManager {
     }
 
     getLayoutOptions(layoutName) {
-        // Try to use utils first
-        const viewport = this.graph.getAdjustedViewport();
+        // Get smart options from graph
+        const smartOptions = this.graph.getSmartLayoutOptions(layoutName);
 
-        const baseOptions = {
-            animate: true,
-            animationDuration: 1000,
-            fit: false,
-            boundingBox: viewport
-        };
+        // We can override specific options here if needed
+        const overrides = {};
 
-        // Fallback to basic options if utils not available
-        return {
-            name: layoutName,
-            animate: true,
-            animationDuration: 1000,
-            fit: false
-        };
+        // For example, if we want to force specific settings for certain layouts
+        switch (layoutName) {
+            case 'fcose':
+                // fcose-specific overrides if needed
+                break;
+            case 'dagre':
+                // dagre-specific overrides if needed
+                break;
+            case 'breadthfirst':
+                // breadthfirst-specific overrides if needed
+                break;
+            case 'circle':
+                // circle-specific overrides if needed
+                break;
+            case 'concentric':
+                // concentric-specific overrides if needed
+                break;
+            case 'grid':
+                // grid-specific overrides if needed
+                break;
+        }
+
+        return { ...smartOptions, ...overrides };
     }
 
     updateSpringLength(value) {
@@ -101,7 +113,7 @@ export class LayoutManager {
             };
         });
 
-        // Run layout with new spring length
+        // Get layout options and modify
         const options = this.getLayoutOptions('fcose');
         options.idealEdgeLength = value;
         options.randomize = false;
@@ -109,6 +121,7 @@ export class LayoutManager {
         options.animationDuration = 300;
         options.numIter = 250;
 
+        // Use runLayoutWithFit to ensure proper viewport adjustment
         this.currentLayout = this.graph.runLayoutWithFit('fcose', options);
     }
 

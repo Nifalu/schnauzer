@@ -14,19 +14,30 @@ export class Graph {
         const container = this.ui.elements.graphContainer;
         if (!container) {
             console.error('Graph container not found');
+            if (this.ui) {
+                this.ui.showStatus('Error: Graph container not found', 'error');
+            }
             return;
         }
 
-        this.cy = cytoscape({
-            container: container,
-            style: this.getStyles(),
-            minZoom: 0.1,
-            maxZoom: 4,
-            wheelSensitivity: 0.2
-        });
+        try {
+            this.cy = cytoscape({
+                container: container,
+                style: this.getStyles(),
+                minZoom: 0.1,
+                maxZoom: 4,
+                wheelSensitivity: 0.2
+            });
 
-        this.state.setCy(this.cy);
-        return this.cy;
+            this.state.setCy(this.cy);
+            return this.cy;
+        } catch (error) {
+            console.error('Failed to initialize Cytoscape:', error);
+            if (this.ui) {
+                this.ui.showStatus('Error: Failed to initialize graph', 'error');
+            }
+            return null;
+        }
     }
 
     getStyles() {
@@ -50,7 +61,7 @@ export class Graph {
                     'border-width': 1,
                     'border-color': '#fff',
                     'font-size': 14,
-                    'color': (ele) => this.getTextColor(ele.data('color') || '#999')
+                    'color': (ele) => this.ui.getTextColor(ele.data('color') || '#999')
                 }
             },
             {
@@ -119,24 +130,52 @@ export class Graph {
     }
 
     render(data) {
-        if (!this.cy || !data || !data.elements) {
-            console.error('Cannot render: missing cy or data');
+        if (!this.cy) {
+            console.error('Cannot render: Cytoscape not initialized');
+            if (this.ui) {
+                this.ui.showStatus('Error: Graph not initialized', 'error');
+            }
+            return;
+        }
+
+        if (!data || !data.elements) {
+            console.error('Cannot render: invalid data structure');
+            if (this.ui) {
+                this.ui.showStatus('Error: Invalid graph data received', 'error');
+            }
             return;
         }
 
         // Clear existing elements
         this.cy.elements().remove();
 
+        // Check if we have any elements to add
+        const hasNodes = data.elements.nodes && data.elements.nodes.length > 0;
+        const hasEdges = data.elements.edges && data.elements.edges.length > 0;
+
+        if (!hasNodes && !hasEdges) {
+            // Empty graph - this is OK, not an error
+            console.log('Rendering empty graph');
+            return;
+        }
+
         // Add new elements
-        this.cy.add(data.elements);
+        try {
+            this.cy.add(data.elements);
 
-        // Center nodes initially
-        const centerX = (window.innerWidth - 300) / 2;
-        const centerY = window.innerHeight / 2;
-        this.cy.nodes().positions({ x: centerX, y: centerY });
+            // Center nodes initially
+            const centerX = (window.innerWidth - 300) / 2;
+            const centerY = window.innerHeight / 2;
+            this.cy.nodes().positions({ x: centerX, y: centerY });
 
-        // Run default layout
-        this.runLayout('fcose');
+            // Run default layout
+            this.runLayout('fcose');
+        } catch (error) {
+            console.error('Error rendering graph:', error);
+            if (this.ui) {
+                this.ui.showStatus('Error: Failed to render graph data', 'error');
+            }
+        }
     }
 
     runLayout(layoutName, options = {}) {
@@ -169,15 +208,6 @@ export class Graph {
         }
 
         return processedName.substring(0, midPoint) + '\n' + processedName.substring(midPoint);
-    }
-
-    getTextColor(bgColor) {
-        const color = bgColor.startsWith('#') ? bgColor.substring(1) : bgColor;
-        const r = parseInt(color.substring(0, 2), 16);
-        const g = parseInt(color.substring(2, 4), 16);
-        const b = parseInt(color.substring(4, 6), 16);
-        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-        return luminance > 0.5 ? '#000000' : '#ffffff';
     }
 
     resetZoom() {

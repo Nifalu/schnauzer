@@ -123,7 +123,16 @@ export class UI {
     }
 
     updateStats(data) {
-        if (!data || !data.elements) return;
+        if (!data || !data.elements) {
+            // No data yet
+            if (this.elements.nodeCount) {
+                this.elements.nodeCount.textContent = '0';
+            }
+            if (this.elements.edgeCount) {
+                this.elements.edgeCount.textContent = '0';
+            }
+            return;
+        }
 
         const nodeCount = data.elements.nodes?.length || 0;
         const edgeCount = data.elements.edges?.length || 0;
@@ -134,15 +143,51 @@ export class UI {
         if (this.elements.edgeCount) {
             this.elements.edgeCount.textContent = edgeCount;
         }
+
+        // Show a subtle hint if graph is empty
+        if (nodeCount === 0 && edgeCount === 0) {
+            // Add a subtle background message
+            if (!document.getElementById('empty-graph-message')) {
+                const container = this.elements.graphContainer;
+                if (container) {
+                    const emptyMsg = document.createElement('div');
+                    emptyMsg.id = 'empty-graph-message';
+                    emptyMsg.style.cssText = `
+                        position: absolute;
+                        top: 90%;
+                        left: 50%;
+                        transform: translate(-50%, -50%);
+                        color: #999;
+                        font-size: 18px;
+                        text-align: center;
+                        pointer-events: none;
+                        user-select: none;
+                        z-index: 1;
+                    `;
+                    emptyMsg.innerHTML = `
+                        <div>No graph data available</div>
+                        <div style="font-size: 14px; color: #aaa; margin-top: 8px;">Waiting for data...</div>
+                    `;
+                    container.appendChild(emptyMsg);
+                }
+            }
+        } else {
+            // Remove empty message if it exists
+            const emptyMsg = document.getElementById('empty-graph-message');
+            if (emptyMsg) {
+                emptyMsg.remove();
+            }
+        }
     }
 
     updateTitle(title) {
-        if (!title) return;
+        // Use a default title if none provided
+        const displayTitle = title || 'Schnauzer Graph Visualization';
 
-        document.title = title;
+        document.title = displayTitle;
         const header = document.querySelector('h1.graph-title');
         if (header) {
-            header.textContent = title;
+            header.textContent = displayTitle;
         }
     }
 
@@ -272,7 +317,7 @@ export class UI {
 
         // For long text, create expandable element
         const truncated = fullText.substring(0, maxLength) + '...';
-        const uniqueId = 'expand-' + Math.random().toString(36).substr(2, 9);
+        const uniqueId = 'expand-' + Math.random().toString(36).slice(2, 11);
 
         return `
             <span class="expandable-value">

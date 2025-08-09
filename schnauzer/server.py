@@ -43,7 +43,10 @@ class Server:
         log.setLevel(log_level)
         self.web_port = web_port
         self.backend_port = backend_port
-        self.current_graph = {'nodes': [], 'edges': [], 'title': 'NetworkX DiGraph Visualization'}
+        self.current_graph = {
+            'elements': {'nodes': [], 'edges': []},
+            'title': 'NetworkX DiGraph Visualization'
+        }
 
         # Backend server attributes
         self.running = False
